@@ -1865,7 +1865,7 @@ class _AboutCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                'Sürüm 1.1.5',
+                'Sürüm 1.1.6',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onPrimaryContainer,
                   fontWeight: FontWeight.w500,
