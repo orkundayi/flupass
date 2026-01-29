@@ -55,6 +55,7 @@ final themeControllerProvider = NotifierProvider<ThemeController, ThemeMode>(
 
 class ThemeController extends Notifier<ThemeMode> {
   late final SettingsRepository _settingsRepository;
+  bool _isInitialized = false;
 
   @override
   ThemeMode build() {
@@ -62,6 +63,8 @@ class ThemeController extends Notifier<ThemeMode> {
     _loadThemeMode();
     return ThemeMode.system;
   }
+
+  bool get isInitialized => _isInitialized;
 
   Future<void> setTheme(ThemeMode mode) async {
     if (state == mode) {
@@ -73,14 +76,37 @@ class ThemeController extends Notifier<ThemeMode> {
   }
 
   Future<void> toggleTheme() async {
-    final nextMode = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    // Eğer sistem modundaysak, sistemin mevcut temasına göre geçiş yap
+    ThemeMode nextMode;
+    if (state == ThemeMode.system) {
+      // Sistem modundan çıkıyoruz
+      nextMode = ThemeMode.dark;
+    } else {
+      nextMode = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    }
     await setTheme(nextMode);
   }
 
   Future<void> _loadThemeMode() async {
     final savedMode = await _settingsRepository.loadThemeMode();
-    if (savedMode != null && savedMode != state) {
+    if (savedMode != null) {
       state = savedMode;
+    }
+    _isInitialized = true;
+  }
+}
+
+/// Helper extension to check if current theme is dark mode
+extension ThemeModeExtension on ThemeMode {
+  /// Returns true if this theme mode results in dark theme
+  bool isDarkMode(BuildContext context) {
+    switch (this) {
+      case ThemeMode.dark:
+        return true;
+      case ThemeMode.light:
+        return false;
+      case ThemeMode.system:
+        return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
     }
   }
 }

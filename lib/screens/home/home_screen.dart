@@ -5,6 +5,7 @@ import '../../providers/app_providers.dart';
 import '../../providers/credential_providers.dart';
 import '../../providers/credit_card_providers.dart';
 import '../../services/security_service.dart';
+import '../../widgets/themed_app_icon.dart';
 import '../cards/cards_screen.dart';
 import '../passwords/passwords_screen.dart';
 import '../passwords/password_form_screen.dart';
@@ -105,14 +106,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image.asset(
-                  'assets/appicon/flupass.png',
-                  width: 28,
-                  height: 28,
-                ),
-              ),
+              child: const ThemedAppIconSmall(showGlow: true),
             ),
             const SizedBox(width: 12),
             Text(
@@ -136,7 +130,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
-                ref.watch(themeControllerProvider) == ThemeMode.dark
+                ref.watch(themeControllerProvider).isDarkMode(context)
                     ? Icons.dark_mode_rounded
                     : Icons.light_mode_rounded,
                 size: 20,
@@ -432,69 +426,111 @@ class _SecurityWarningBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Koyu ve açık temada iyi görünen sabit renkler
+    final warningRed = isDark
+        ? const Color(0xFFFF6B6B)
+        : const Color(0xFFDC3545);
+    final bgColor = isDark ? const Color(0xFF2D1F1F) : const Color(0xFFFEECEC);
+    final borderColor = isDark
+        ? const Color(0xFF5C3333)
+        : const Color(0xFFFFCDD2);
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Ink(
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                theme.colorScheme.errorContainer,
-                theme.colorScheme.errorContainer.withValues(alpha: 0.7),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.colorScheme.error.withValues(alpha: 0.3),
-            ),
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: warningRed.withValues(alpha: isDark ? 0.2 : 0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
+                // Animasyonlu uyarı ikonu
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.error.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [warningRed, warningRed.withValues(alpha: 0.8)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: warningRed.withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: Icon(
+                  child: const Icon(
                     Icons.shield_outlined,
-                    color: theme.colorScheme.error,
-                    size: 24,
+                    color: Colors.white,
+                    size: 26,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Güvenlik Aktif Değil',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.onErrorContainer,
-                        ),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: warningRed,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Güvenlik Aktif Değil',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: warningRed,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         'Verilerinizi korumak için biyometrik veya PIN etkinleştirin',
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onErrorContainer.withValues(
-                            alpha: 0.8,
-                          ),
+                          color: isDark
+                              ? Colors.white70
+                              : theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.7,
+                                ),
+                          height: 1.3,
                         ),
                       ),
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 16,
-                  color: theme.colorScheme.onErrorContainer,
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: warningRed.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: warningRed,
+                  ),
                 ),
               ],
             ),
@@ -570,19 +606,19 @@ class _StatsSection extends StatelessWidget {
           children: [
             Expanded(
               child: _StatCard(
-                icon: Icons.lock_outline,
-                value: credentialCount,
-                label: 'Şifre',
-                color: theme.colorScheme.primary,
+                icon: Icons.star_rounded,
+                value: favoriteCount,
+                label: 'Favori',
+                color: theme.colorScheme.tertiary,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _StatCard(
-                icon: Icons.star_rounded,
-                value: favoriteCount,
-                label: 'Favori',
-                color: theme.colorScheme.tertiary,
+                icon: Icons.lock_outline,
+                value: credentialCount,
+                label: 'Şifre',
+                color: theme.colorScheme.primary,
               ),
             ),
             const SizedBox(width: 12),
@@ -602,9 +638,9 @@ class _StatsSection extends StatelessWidget {
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 6) return 'İyi geceler 🌙';
-    if (hour < 12) return 'Günaydın ☀️';
-    if (hour < 18) return 'İyi günler 👋';
+    if (hour < 6) return 'İyi geceler';
+    if (hour < 12) return 'Günaydın';
+    if (hour < 18) return 'İyi günler';
     return 'İyi akşamlar';
   }
 }

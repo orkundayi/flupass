@@ -16,6 +16,8 @@ class MainActivity : FlutterFragmentActivity() {
 
 	override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
 		super.configureFlutterEngine(flutterEngine)
+		
+		// Autofill Channel
 		MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUTOFILL_CHANNEL)
 			.setMethodCallHandler { call, result ->
 				when (call.method) {
@@ -51,6 +53,18 @@ class MainActivity : FlutterFragmentActivity() {
 					else -> result.notImplemented()
 				}
 			}
+		
+		// Settings Channel
+		MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SETTINGS_CHANNEL)
+			.setMethodCallHandler { call, result ->
+				when (call.method) {
+					"openAppSettings" -> {
+						val opened = openAppSettings()
+						result.success(opened)
+					}
+					else -> result.notImplemented()
+				}
+			}
 	}
 
 	private fun openAutofillSettings(): Boolean {
@@ -76,7 +90,28 @@ class MainActivity : FlutterFragmentActivity() {
 		return false
 	}
 
+	private fun openAppSettings(): Boolean {
+		return try {
+			val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+				data = Uri.parse("package:$packageName")
+			}
+			startActivity(intent)
+			true
+		} catch (error: ActivityNotFoundException) {
+			// Fallback: genel ayarları aç
+			try {
+				startActivity(Intent(Settings.ACTION_SETTINGS))
+				true
+			} catch (_: Exception) {
+				false
+			}
+		} catch (_: Exception) {
+			false
+		}
+	}
+
 	companion object {
 		private const val AUTOFILL_CHANNEL = "com.flutech.flupass/autofill"
+		private const val SETTINGS_CHANNEL = "com.flutech.flupass/settings"
 	}
 }

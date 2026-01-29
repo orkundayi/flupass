@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,10 +25,15 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
   late final TextEditingController _expiryController;
   late final TextEditingController _cvvController;
 
+  // Focus nodes for better keyboard navigation
+  final _titleFocus = FocusNode();
+  final _holderFocus = FocusNode();
+  final _numberFocus = FocusNode();
+  final _expiryFocus = FocusNode();
+  final _cvvFocus = FocusNode();
+
   bool _isSubmitting = false;
   bool _isDeleting = false;
-  late final List<TextEditingController> _previewControllers;
-
   late AnimationController _animationController;
   late Animation<double> _animation;
   bool _isCvvFocused = false;
@@ -35,17 +42,48 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
 
   bool get _isEditing => widget.initialCard != null;
 
+  // Form değişiklik kontrolü için
+  bool get _hasChanges {
+    final card = widget.initialCard;
+    if (card == null) {
+      // Yeni kayıt - herhangi bir alan dolduysa değişiklik var
+      return _titleController.text.isNotEmpty ||
+          _holderController.text.isNotEmpty ||
+          _numberController.text.isNotEmpty ||
+          _expiryController.text.isNotEmpty ||
+          _cvvController.text.isNotEmpty;
+    }
+    // Düzenleme - orijinalle karşılaştır
+    final sanitizedOriginalNumber = card.cardNumber.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+    final sanitizedCurrentNumber = _numberController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
+    return _titleController.text.trim() != (card.displayName ?? '') ||
+        _holderController.text.trim() != card.cardHolderName ||
+        sanitizedCurrentNumber != sanitizedOriginalNumber ||
+        _expiryController.text.trim() != card.expiryDate ||
+        _cvvController.text.trim() != card.cvv;
+  }
+
   static final _cardNumberFormatter = TextInputFormatter.withFunction((
     oldValue,
     newValue,
   ) {
     final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    // Limit to 19 digits (max card number length)
+    final limited = digitsOnly.length > 19
+        ? digitsOnly.substring(0, 19)
+        : digitsOnly;
     final buffer = StringBuffer();
-    for (var i = 0; i < digitsOnly.length; i++) {
+    for (var i = 0; i < limited.length; i++) {
       if (i > 0 && i % 4 == 0) {
         buffer.write(' ');
       }
-      buffer.write(digitsOnly[i]);
+      buffer.write(limited[i]);
     }
     final formatted = buffer.toString();
     return TextEditingValue(
@@ -93,196 +131,440 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
       curve: Curves.easeInOut,
     );
 
-    _previewControllers = [
-      _titleController,
-      _holderController,
-      _numberController,
-      _expiryController,
-      _cvvController,
-    ];
-    for (final controller in _previewControllers) {
-      controller.addListener(_onPreviewChanged);
-    }
+    // Listen for changes to trigger rebuild for _hasChanges
+    _titleController.addListener(_onFieldChanged);
+    _holderController.addListener(_onFieldChanged);
+    _numberController.addListener(_onFieldChanged);
+    _expiryController.addListener(_onFieldChanged);
+    _cvvController.addListener(_onFieldChanged);
 
     _numberController.addListener(_updateCardColor);
     _updateCardColor();
   }
 
+  void _onFieldChanged() {
+    // Trigger rebuild to update _hasChanges
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
-    for (final controller in _previewControllers) {
-      controller.removeListener(_onPreviewChanged);
-    }
+    _titleController.removeListener(_onFieldChanged);
+    _holderController.removeListener(_onFieldChanged);
+    _numberController.removeListener(_onFieldChanged);
+    _expiryController.removeListener(_onFieldChanged);
+    _cvvController.removeListener(_onFieldChanged);
+
     _titleController.dispose();
     _holderController.dispose();
     _numberController.dispose();
     _expiryController.dispose();
     _cvvController.dispose();
+
+    _titleFocus.dispose();
+    _holderFocus.dispose();
+    _numberFocus.dispose();
+    _expiryFocus.dispose();
+    _cvvFocus.dispose();
     super.dispose();
+  }
+
+  Future<bool> _onWillPop() async {
+    if (_isSubmitting || _isDeleting) return false;
+    if (!_hasChanges) return true;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.warning_amber_rounded, size: 48),
+        title: const Text('Değişiklikleri kaydetmediniz'),
+        content: const Text(
+          'Kaydedilmemiş değişiklikleriniz var. Çıkmak istediğinize emin misiniz?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Düzenlemeye devam et'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Kaydetmeden çık'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEditing ? 'Kartı düzenle' : 'Kart ekle'),
-        actions: [
-          if (_isEditing)
-            IconButton(
-              tooltip: 'Kartı sil',
-              icon: _isDeleting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.delete_outline),
-              onPressed: _isDeleting ? null : _confirmDelete,
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+
+    return PopScope(
+      canPop: !_hasChanges && !_isSubmitting && !_isDeleting,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldPop = await _onWillPop();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: theme.colorScheme.surface,
+          surfaceTintColor: Colors.transparent,
+          title: Row(
             children: [
-              _buildPreview(theme),
-              const SizedBox(height: 24),
-              _SectionCard(
-                title: 'Kart bilgileri',
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  _isEditing ? Icons.edit_rounded : Icons.add_card_rounded,
+                  color: theme.colorScheme.tertiary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(_isEditing ? 'Kartı düzenle' : 'Yeni kart'),
+            ],
+          ),
+          actions: [
+            if (_isEditing)
+              IconButton(
+                tooltip: 'Kartı sil',
+                icon: _isDeleting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        Icons.delete_outline,
+                        color: theme.colorScheme.error,
+                      ),
+                onPressed: _isDeleting ? null : _confirmDelete,
+              ),
+          ],
+        ),
+        body: GestureDetector(
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: SafeArea(
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
                 children: [
-                  _buildField(
-                    controller: _titleController,
-                    label: 'Kart adı (isteğe bağlı)',
-                    hintText: 'Örn. İş kartı',
-                    textInputAction: TextInputAction.next,
-                    onTap: _flipToFront,
+                  // Card Preview
+                  _buildPreview(theme),
+
+                  const SizedBox(height: 24),
+
+                  // Card Name Section
+                  _buildSectionHeader(
+                    icon: Icons.label_outline,
+                    title: 'Kart Adı',
+                    color: theme.colorScheme.secondary,
                   ),
-                  const SizedBox(height: 16),
-                  _buildField(
-                    controller: _holderController,
-                    label: 'Kart sahibi',
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Kart sahibi adı zorunludur';
-                      }
-                      return null;
-                    },
-                    textInputAction: TextInputAction.next,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r"[a-zA-ZğüşöçıİĞÜŞÖÇ\s]"),
+                  const SizedBox(height: 12),
+
+                  _buildInputCard(
+                    children: [
+                      _buildInputField(
+                        controller: _titleController,
+                        focusNode: _titleFocus,
+                        label: 'Kart adı (isteğe bağlı)',
+                        hint: 'Örn. İş kartı, Bonus, Maximum',
+                        icon: Icons.credit_card_rounded,
+                        textInputAction: TextInputAction.next,
+                        textCapitalization: TextCapitalization.words,
+                        onSubmitted: (_) => _holderFocus.requestFocus(),
+                        onTap: _flipToFront,
                       ),
                     ],
-                    onTap: _flipToFront,
                   ),
-                  const SizedBox(height: 16),
-                  _buildField(
-                    controller: _numberController,
-                    label: 'Kart numarası',
-                    hintText: '0000 0000 0000 0000',
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.next,
-                    validator: (value) {
-                      final digits =
-                          value?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
-                      if (digits.length < 12) {
-                        return 'Geçerli bir kart numarası girin';
-                      }
-                      return null;
-                    },
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      _cardNumberFormatter,
+
+                  const SizedBox(height: 24),
+
+                  // Card Details Section
+                  _buildSectionHeader(
+                    icon: Icons.credit_card_rounded,
+                    title: 'Kart Bilgileri',
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildInputCard(
+                    children: [
+                      _buildInputField(
+                        controller: _holderController,
+                        focusNode: _holderFocus,
+                        label: 'Kart sahibi',
+                        hint: 'AD SOYAD',
+                        icon: Icons.person_outline,
+                        textInputAction: TextInputAction.next,
+                        textCapitalization: TextCapitalization.characters,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r"[a-zA-ZğüşöçıİĞÜŞÖÇ\s]"),
+                          ),
+                          LengthLimitingTextInputFormatter(50),
+                        ],
+                        onSubmitted: (_) => _numberFocus.requestFocus(),
+                        onTap: _flipToFront,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Kart sahibi adı zorunludur';
+                          }
+                          if (value.trim().length < 3) {
+                            return 'En az 3 karakter olmalı';
+                          }
+                          return null;
+                        },
+                      ),
+                      const _InputDivider(),
+                      _buildInputField(
+                        controller: _numberController,
+                        focusNode: _numberFocus,
+                        label: 'Kart numarası',
+                        hint: '0000 0000 0000 0000',
+                        icon: Icons.dialpad_rounded,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.next,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          _cardNumberFormatter,
+                        ],
+                        onSubmitted: (_) => _expiryFocus.requestFocus(),
+                        onTap: _flipToFront,
+                        validator: (value) {
+                          final digits =
+                              value?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+                          if (digits.isEmpty) {
+                            return 'Kart numarası zorunludur';
+                          }
+                          if (digits.length < 13) {
+                            return 'En az 13 haneli olmalı';
+                          }
+                          if (digits.length > 19) {
+                            return 'En fazla 19 haneli olabilir';
+                          }
+                          return null;
+                        },
+                      ),
                     ],
-                    onTap: _flipToFront,
                   ),
+
                   const SizedBox(height: 16),
+
+                  // Expiry and CVV Row
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: _buildField(
-                          controller: _expiryController,
-                          label: 'SKT (AA/YY)',
-                          hintText: '12/28',
-                          keyboardType: TextInputType.number,
-                          textInputAction: TextInputAction.next,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Son kullanma tarihi zorunludur';
-                            }
-                            final parts = value.split('/');
-                            if (parts.length != 2) {
-                              return 'Geçerli bir tarih girin';
-                            }
-                            final month = int.tryParse(parts[0]);
-                            final year = int.tryParse(parts[1]);
-                            if (month == null || month < 1 || month > 12) {
-                              return 'Ay 01-12 aralığında olmalı';
-                            }
-                            if (year == null || year < 0) {
-                              return 'Yılı kontrol edin';
-                            }
-                            return null;
-                          },
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            _expiryFormatter,
+                        child: _buildInputCard(
+                          children: [
+                            _buildInputField(
+                              controller: _expiryController,
+                              focusNode: _expiryFocus,
+                              label: 'Son kullanma',
+                              hint: 'AA/YY',
+                              icon: Icons.calendar_today_rounded,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                _expiryFormatter,
+                              ],
+                              onSubmitted: (_) {
+                                _cvvFocus.requestFocus();
+                                _flipToBack();
+                              },
+                              onTap: _flipToFront,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'SKT zorunludur';
+                                }
+                                final parts = value.split('/');
+                                if (parts.length != 2) {
+                                  return 'AA/YY formatında olmalı';
+                                }
+                                final month = int.tryParse(parts[0]);
+                                final year = int.tryParse(parts[1]);
+                                if (month == null || month < 1 || month > 12) {
+                                  return 'Ay 01-12 olmalı';
+                                }
+                                if (year == null) {
+                                  return 'Yıl geçersiz';
+                                }
+                                // Check if card is expired
+                                final now = DateTime.now();
+                                final currentYear = now.year % 100;
+                                final currentMonth = now.month;
+                                if (year < currentYear ||
+                                    (year == currentYear &&
+                                        month < currentMonth)) {
+                                  return 'Kartın süresi dolmuş';
+                                }
+                                return null;
+                              },
+                            ),
                           ],
-                          onTap: _flipToFront,
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: _buildField(
-                          controller: _cvvController,
-                          label: 'CVV',
-                          hintText: '123',
-                          keyboardType: TextInputType.number,
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'CVV zorunludur';
-                            }
-                            if (value.trim().length < 3) {
-                              return 'CVV 3 veya 4 haneli olmalıdır';
-                            }
-                            return null;
-                          },
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(4),
+                        child: _buildInputCard(
+                          children: [
+                            _buildInputField(
+                              controller: _cvvController,
+                              focusNode: _cvvFocus,
+                              label: 'CVV',
+                              hint: '•••',
+                              icon: Icons.lock_outline,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.done,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(4),
+                              ],
+                              onTap: _flipToBack,
+                              onSubmitted: (_) {
+                                FocusScope.of(context).unfocus();
+                                _flipToFront();
+                              },
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'CVV zorunludur';
+                                }
+                                final cardType = _getCardType(
+                                  _numberController.text,
+                                );
+                                // AMEX uses 4 digit CVV, others use 3
+                                final requiredLength = cardType == CardType.amex
+                                    ? 4
+                                    : 3;
+                                if (value.trim().length < requiredLength) {
+                                  return '$requiredLength haneli olmalı';
+                                }
+                                return null;
+                              },
+                            ),
                           ],
-                          onTap: () {
-                            setState(() {
-                              _isCvvFocused = true;
-                              _animationController.forward();
-                            });
-                          },
-                          onEditingComplete: () {
-                            setState(() {
-                              _isCvvFocused = false;
-                              _animationController.reverse();
-                            });
-                            FocusScope.of(context).unfocus();
-                          },
                         ),
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 32),
+
+                  // Save Button
+                  _buildSaveButton(),
+
+                  // Spacer for keyboard
+                  SizedBox(
+                    height: MediaQuery.of(context).viewInsets.bottom > 0
+                        ? 200
+                        : 0,
+                  ),
                 ],
               ),
-              const SizedBox(height: 32),
-              FilledButton.icon(
-                icon: const Icon(Icons.save_outlined),
-                label: Text(_isSubmitting ? 'Kaydediliyor...' : 'Kaydet'),
-                onPressed: _isSubmitting ? null : _handleSubmit,
-              ),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required IconData icon,
+    required String title,
+    required Color color,
+  }) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputCard({required List<Widget> children}) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+    TextInputAction? textInputAction,
+    TextCapitalization textCapitalization = TextCapitalization.none,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
+    void Function(String)? onSubmitted,
+    VoidCallback? onTap,
+  }) {
+    final theme = Theme.of(context);
+    return TextFormField(
+      controller: controller,
+      focusNode: focusNode,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      textCapitalization: textCapitalization,
+      inputFormatters: inputFormatters,
+      validator: validator,
+      onFieldSubmitted: onSubmitted,
+      onTap: onTap,
+      style: theme.textTheme.bodyLarge,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        hintStyle: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
+        prefixIcon: Icon(icon, size: 22),
+        border: InputBorder.none,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        errorStyle: const TextStyle(height: 0.8),
       ),
     );
   }
@@ -291,31 +573,57 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Canlı önizleme',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.visibility_rounded,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Canlı önizleme',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () {
+                if (_isCvvFocused) {
+                  _flipToFront();
+                } else {
+                  _flipToBack();
+                }
+              },
+              icon: const Icon(Icons.flip_rounded, size: 18),
+              label: Text(_isCvvFocused ? 'Ön yüz' : 'Arka yüz'),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         GestureDetector(
-          onTap: () {
-            if (_isCvvFocused) {
-              setState(() {
-                _isCvvFocused = false;
-                _animationController.reverse();
-              });
-            } else {
-              setState(() {
-                _isCvvFocused = true;
-                _animationController.forward();
-              });
+          onHorizontalDragEnd: (details) {
+            if (details.primaryVelocity != null &&
+                details.primaryVelocity!.abs() > 100) {
+              if (_isCvvFocused) {
+                _flipToFront();
+              } else {
+                _flipToBack();
+              }
             }
           },
           child: AnimatedBuilder(
             animation: _animation,
             builder: (context, child) {
-              final angle = _animation.value * 3.14159265359;
+              final angle = _animation.value * math.pi;
               final frontVisible = _animation.value <= 0.5;
 
               return Transform(
@@ -326,16 +634,16 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                 child: Container(
                   width: double.infinity,
                   height: 200,
-                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
                   decoration: BoxDecoration(
                     color: _cardColor,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.3),
+                        color: _cardColor.withValues(alpha: 0.4),
                         spreadRadius: 1,
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
                     ],
                     gradient: LinearGradient(
@@ -343,7 +651,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                       end: Alignment.bottomRight,
                       colors: [
                         _cardColor,
-                        Color.lerp(_cardColor, Colors.black, 0.2)!,
+                        Color.lerp(_cardColor, Colors.black, 0.25)!,
                       ],
                     ),
                   ),
@@ -351,7 +659,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                       ? _buildFrontCard()
                       : Transform(
                           alignment: Alignment.center,
-                          transform: Matrix4.identity()..rotateY(3.14159265359),
+                          transform: Matrix4.identity()..rotateY(math.pi),
                           child: _buildBackCard(),
                         ),
                 ),
@@ -391,13 +699,13 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: Colors.amber,
+                  color: Colors.amber.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Icon(
                   Icons.credit_card_outlined,
                   size: 32,
-                  color: _textColor,
+                  color: Colors.amber.shade900,
                 ),
               ),
             ],
@@ -423,8 +731,8 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                     Text(
                       'KART SAHİBİ',
                       style: TextStyle(
-                        color: _textColor,
-                        fontSize: 12,
+                        color: _textColor.withValues(alpha: 0.7),
+                        fontSize: 10,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -435,7 +743,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                           : 'AD SOYAD',
                       style: TextStyle(
                         color: _textColor,
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                       ),
                       maxLines: 1,
@@ -450,8 +758,8 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                   Text(
                     'SON KULLANIM',
                     style: TextStyle(
-                      color: _textColor,
-                      fontSize: 12,
+                      color: _textColor.withValues(alpha: 0.7),
+                      fontSize: 10,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -462,7 +770,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                         : 'AA/YY',
                     style: TextStyle(
                       color: _textColor,
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -521,10 +829,11 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
                   ),
                   alignment: Alignment.center,
                   child: Text(
-                    _cvvController.text.isEmpty ? '***' : _cvvController.text,
+                    _cvvController.text.isEmpty ? '•••' : _cvvController.text,
                     style: const TextStyle(
                       color: Colors.black,
                       fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
                   ),
                 ),
@@ -544,33 +853,37 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
     );
   }
 
-  Widget _buildField({
-    required TextEditingController controller,
-    required String label,
-    String? hintText,
-    String? Function(String?)? validator,
-    TextInputType? keyboardType,
-    TextInputAction? textInputAction,
-    List<TextInputFormatter>? inputFormatters,
-    VoidCallback? onTap,
-    VoidCallback? onEditingComplete,
-  }) {
+  Widget _buildSaveButton() {
     final theme = Theme.of(context);
-    return TextFormField(
-      controller: controller,
-      validator: validator,
-      keyboardType: keyboardType,
-      textInputAction: textInputAction,
-      inputFormatters: inputFormatters,
-      onTap: onTap,
-      onEditingComplete: onEditingComplete,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hintText,
-        filled: true,
-        fillColor: theme.colorScheme.surfaceContainerHighest,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+    return FilledButton(
+      onPressed: _isSubmitting ? null : _handleSubmit,
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
+      child: _isSubmitting
+          ? SizedBox(
+              height: 24,
+              width: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: theme.colorScheme.onPrimary,
+              ),
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.check_rounded, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  _isEditing ? 'Değişiklikleri kaydet' : 'Kartı kaydet',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -578,19 +891,19 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
     final cardType = _getCardType(_numberController.text);
     switch (cardType) {
       case CardType.visa:
-        _cardColor = const Color(0xFF172571);
+        _cardColor = const Color(0xFF1A1F71);
         _textColor = Colors.white;
         break;
       case CardType.mastercard:
-        _cardColor = const Color(0xFF444444);
+        _cardColor = const Color(0xFF2B2B2B);
         _textColor = Colors.white;
         break;
       case CardType.amex:
-        _cardColor = const Color(0xFF0F6EB3);
+        _cardColor = const Color(0xFF006FCF);
         _textColor = Colors.white;
         break;
       case CardType.discover:
-        _cardColor = const Color(0xFFEE6000);
+        _cardColor = const Color(0xFFFF6600);
         _textColor = Colors.white;
         break;
       default:
@@ -613,8 +926,9 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
       return CardType.visa;
     } else if ((cardNumber.startsWith(RegExp(r'5[1-5]'))) ||
         (cardNumber.length >= 4 &&
-            int.tryParse(cardNumber.substring(0, 4))! >= 2221 &&
-            int.tryParse(cardNumber.substring(0, 4))! <= 2720)) {
+            int.tryParse(cardNumber.substring(0, 4)) != null &&
+            int.parse(cardNumber.substring(0, 4)) >= 2221 &&
+            int.parse(cardNumber.substring(0, 4)) <= 2720)) {
       return CardType.mastercard;
     } else if (cardNumber.startsWith('34') || cardNumber.startsWith('37')) {
       return CardType.amex;
@@ -627,42 +941,65 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
             cardNumber.startsWith('648') ||
             cardNumber.startsWith('649')) ||
         (cardNumber.length >= 6 &&
-            int.tryParse(cardNumber.substring(0, 6))! >= 622126 &&
-            int.tryParse(cardNumber.substring(0, 6))! <= 622925)) {
+            int.tryParse(cardNumber.substring(0, 6)) != null &&
+            int.parse(cardNumber.substring(0, 6)) >= 622126 &&
+            int.parse(cardNumber.substring(0, 6)) <= 622925)) {
       return CardType.discover;
-    } else if (cardNumber.length >= 13 && cardNumber.length <= 19) {
-      return CardType.other;
     }
 
-    return CardType.invalid;
+    return CardType.other;
   }
 
   Widget _getCardTypeLogo() {
     final cardType = _getCardType(_numberController.text);
     switch (cardType) {
       case CardType.visa:
-        return const Text(
-          'VISA',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
             color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text(
+            'VISA',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1F71),
+              fontStyle: FontStyle.italic,
+            ),
           ),
         );
       case CardType.mastercard:
-        return const Text(
-          'MasterCard',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: const BoxDecoration(
+                color: Color(0xFFEB001B),
+                shape: BoxShape.circle,
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(-8, 0),
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF79E1B).withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
         );
       case CardType.amex:
         return const Text(
           'AMEX',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -671,7 +1008,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
         return const Text(
           'DISCOVER',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 14,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -680,7 +1017,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
         return const Text(
           'CARD',
           style: TextStyle(
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
@@ -692,9 +1029,9 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
     final cardType = _getCardType(_numberController.text);
     switch (cardType) {
       case CardType.visa:
-        return 'BANKA';
+        return 'VISA';
       case CardType.mastercard:
-        return 'BANKA';
+        return 'MASTERCARD';
       case CardType.amex:
         return 'AMERICAN EXPRESS';
       case CardType.discover:
@@ -713,11 +1050,13 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
     }
   }
 
-  void _onPreviewChanged() {
-    if (!mounted) {
-      return;
+  void _flipToBack() {
+    if (!_isCvvFocused) {
+      setState(() {
+        _isCvvFocused = true;
+        _animationController.forward();
+      });
     }
-    setState(() {});
   }
 
   Future<void> _handleSubmit() async {
@@ -738,7 +1077,7 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
         displayName: _titleController.text.trim().isEmpty
             ? null
             : _titleController.text.trim(),
-        cardHolderName: _holderController.text.trim(),
+        cardHolderName: _holderController.text.trim().toUpperCase(),
         cardNumber: sanitizedNumber,
         expiryDate: _expiryController.text.trim(),
         cvv: _cvvController.text.trim(),
@@ -785,13 +1124,19 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
   }
 
   Future<void> _confirmDelete() async {
+    final theme = Theme.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
+          icon: Icon(
+            Icons.delete_outline_rounded,
+            size: 48,
+            color: theme.colorScheme.error,
+          ),
           title: const Text('Kartı sil'),
           content: const Text(
-            'Bu kart kaydını silmek istediğinize emin misiniz?',
+            'Bu kart kaydını kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
           ),
           actions: [
             TextButton(
@@ -800,6 +1145,9 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: theme.colorScheme.error,
+              ),
               child: const Text('Sil'),
             ),
           ],
@@ -854,34 +1202,18 @@ class _CardFormScreenState extends ConsumerState<CardFormScreen>
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
+class _InputDivider extends StatelessWidget {
+  const _InputDivider();
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ...children,
-        ],
-      ),
+    return Divider(
+      height: 1,
+      thickness: 1,
+      indent: 52,
+      color: Theme.of(
+        context,
+      ).colorScheme.outlineVariant.withValues(alpha: 0.3),
     );
   }
 }

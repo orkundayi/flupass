@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local_auth/error_codes.dart' as auth_error;
+import 'package:local_auth/local_auth.dart';
 
 import '../services/security_service.dart';
 
@@ -435,13 +435,17 @@ class _SecurityVerificationDialogState
   }
 
   String _mapBiometricError(Object error) {
-    final message = error.toString();
-    if (message.contains(auth_error.notAvailable) ||
-        message.contains(auth_error.notEnrolled)) {
-      return 'Cihazınızda biyometrik yöntem tanımlı değil.';
-    }
-    if (message.contains(auth_error.lockedOut)) {
-      return 'Çok fazla başarısız deneme yapıldı. Daha sonra tekrar deneyin.';
+    if (error is LocalAuthException) {
+      switch (error.code) {
+        case LocalAuthExceptionCode.noBiometricHardware:
+        case LocalAuthExceptionCode.noBiometricsEnrolled:
+        case LocalAuthExceptionCode.noCredentialsSet:
+          return 'Cihazınızda biyometrik yöntem tanımlı değil.';
+        case LocalAuthExceptionCode.biometricLockout:
+          return 'Çok fazla başarısız deneme yapıldı. Daha sonra tekrar deneyin.';
+        default:
+          return 'Biyometrik doğrulama tamamlanamadı.';
+      }
     }
     return 'Biyometrik doğrulama tamamlanamadı.';
   }

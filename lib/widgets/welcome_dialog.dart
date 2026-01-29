@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'themed_app_icon.dart';
+
 class WelcomeDialog extends StatelessWidget {
   const WelcomeDialog({super.key});
 
@@ -83,14 +85,7 @@ class WelcomeDialog extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.asset(
-                        'assets/appicon/flupass.png',
-                        width: 64,
-                        height: 64,
-                      ),
-                    ),
+                    child: const ThemedAppIconLarge(showGlow: true),
                   ),
                   const SizedBox(height: 16),
                   Text(

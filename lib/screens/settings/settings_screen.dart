@@ -7,6 +7,7 @@ import '../../providers/app_providers.dart';
 import '../../providers/credential_providers.dart';
 import '../../services/security_overlay_service.dart';
 import '../../services/security_service.dart';
+import '../../widgets/themed_app_icon.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -21,6 +22,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isExportBusy = false;
   bool _isImportBusy = false;
   bool _isAutofillSettingsBusy = false;
+
+  // Güvenlik bölümüne scroll için
+  final _scrollController = ScrollController();
+  final _securitySectionKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToSecuritySection() {
+    final context = _securitySectionKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
   // iOS için parola ayarlarını doğrudan açan method channel
   static const _autofillChannel = MethodChannel('com.flutech.flupass/autofill');
@@ -58,7 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final securityState = ref.watch(securityControllerProvider);
     final securityController = ref.read(securityControllerProvider.notifier);
 
-    final isDarkMode = themeMode == ThemeMode.dark;
+    final isDarkMode = themeMode.isDarkMode(context);
     final platform = Theme.of(context).platform;
     final isIOS = platform == TargetPlatform.iOS;
 
@@ -90,6 +112,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
       ),
       body: CustomScrollView(
+        controller: _scrollController,
         slivers: [
           // Content
           SliverPadding(
@@ -100,7 +123,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 _SecurityStatusCard(
                   state: securityState,
                   onSetupTap: () {
-                    // Scroll to security section or show setup dialog
+                    _scrollToSecuritySection();
                   },
                   onLockTap: () {
                     if (securityState.isSecurityEnabled) {
@@ -138,6 +161,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                 // Security Section
                 _SectionHeader(
+                  key: _securitySectionKey,
                   title: 'Güvenlik',
                   icon: Icons.shield_outlined,
                   color: theme.colorScheme.primary,
@@ -157,6 +181,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           SecurityOverlayManager().showSecurityOverlay(context);
                         }
                       : null,
+                  onOpenBiometricSettings: _openAppSettings,
                 ),
 
                 const SizedBox(height: 28),
@@ -468,33 +493,121 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _isBiometricBusy = true);
     try {
       final messenger = ScaffoldMessenger.of(context);
-      bool success;
+
       if (enable) {
-        success = await controller.setupBiometricAuth();
+        final result = await controller.setupBiometricAuth();
+        if (!mounted) return;
+
+        switch (result) {
+          case BiometricSetupResult.success:
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Biyometrik kimlik doğrulama etkinleştirildi.'),
+              ),
+            );
+            break;
+          case BiometricSetupResult.notSupported:
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Cihazınız biyometrik kimlik doğrulamayı desteklemiyor.',
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            break;
+          case BiometricSetupResult.notEnrolled:
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Önce cihazınıza parmak izi veya Face ID ekleyin.',
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            break;
+          case BiometricSetupResult.permissionDenied:
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Biyometrik erişim sağlanamadı. Ayarlardan izinleri kontrol edin.',
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            break;
+          case BiometricSetupResult.lockedOut:
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Çok fazla başarısız deneme. Lütfen bir süre bekleyin.',
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            break;
+          case BiometricSetupResult.cancelled:
+            // Kullanıcı iptal etti, sessizce geç
+            break;
+          case BiometricSetupResult.failed:
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text('Biyometrik kimlik doğrulama kurulamadı.'),
+              ),
+            );
+            break;
+        }
       } else {
-        success = await controller.authenticateAndRemoveBiometricAuth();
-      }
+        final success = await controller.authenticateAndRemoveBiometricAuth();
+        if (!mounted) return;
 
-      if (!mounted) {
-        return;
-      }
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? (enable
-                      ? 'Biyometrik kimlik doğrulama etkinleştirildi.'
-                      : 'Biyometrik kimlik doğrulama devre dışı bırakıldı.')
-                : (enable
-                      ? 'Biyometrik kimlik doğrulama kurulamadı.'
-                      : 'Biyometrik kimlik doğrulama kapatılamadı.'),
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? 'Biyometrik kimlik doğrulama devre dışı bırakıldı.'
+                  : 'Biyometrik kimlik doğrulama kapatılamadı.',
+            ),
           ),
-        ),
-      );
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isBiometricBusy = false);
+      }
+    }
+  }
+
+  Future<void> _openAppSettings() async {
+    final platform = Theme.of(context).platform;
+
+    try {
+      if (platform == TargetPlatform.iOS) {
+        // iOS: Uygulama ayarlarını aç
+        const iosChannel = MethodChannel('com.flutech.flupass/settings');
+        final opened = await iosChannel.invokeMethod<bool>('openAppSettings');
+        if (opened != true && mounted) {
+          // Fallback: Genel ayarları aç
+          await _autofillChannel.invokeMethod('openPasswordSettings');
+        }
+      } else {
+        // Android: Uygulama ayarlarını aç
+        const androidChannel = MethodChannel('com.flutech.flupass/settings');
+        await androidChannel.invokeMethod('openAppSettings');
+      }
+    } on PlatformException catch (e) {
+      debugPrint('Could not open app settings: ${e.message}');
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        final settingsPath = platform == TargetPlatform.iOS
+            ? 'Ayarlar > FluPass'
+            : 'Ayarlar > Uygulamalar > FluPass > İzinler';
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Lütfen $settingsPath yolunu izleyin.'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     }
   }
@@ -903,6 +1016,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
+    super.key,
     required this.title,
     required this.icon,
     required this.color,
@@ -954,6 +1068,7 @@ class _SecurityStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isSecure = state.isBiometricEnabled || state.isPinEnabled;
 
     final statusText = state.isBiometricEnabled
@@ -966,101 +1081,168 @@ class _SecurityStatusCard extends StatelessWidget {
         ? Icons.face
         : state.isPinEnabled
         ? Icons.pin_outlined
-        : Icons.warning_amber_rounded;
+        : Icons.shield_outlined;
 
-    final color = isSecure
-        ? theme.colorScheme.primary
-        : theme.colorScheme.error;
+    // Güvenlik durumuna göre renkler
+    final Color primaryColor;
+    final Color bgColor;
+    final Color borderColor;
+    final Color iconBgColor;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            color.withValues(alpha: 0.15),
-            color.withValues(alpha: 0.05),
+    if (isSecure) {
+      // Güvenlik aktif - yeşil tonları
+      primaryColor = isDark ? const Color(0xFF4ADE80) : const Color(0xFF22C55E);
+      bgColor = isDark ? const Color(0xFF1A2E1A) : const Color(0xFFECFDF5);
+      borderColor = isDark ? const Color(0xFF2D5A2D) : const Color(0xFFBBF7D0);
+      iconBgColor = primaryColor;
+    } else {
+      // Güvenlik aktif değil - turuncu/amber tonları (dikkat çekici ama agresif değil)
+      primaryColor = isDark ? const Color(0xFFFBBF24) : const Color(0xFFF59E0B);
+      bgColor = isDark ? const Color(0xFF2D2A1A) : const Color(0xFFFFFBEB);
+      borderColor = isDark ? const Color(0xFF5C4A1A) : const Color(0xFFFDE68A);
+      iconBgColor = primaryColor;
+    }
+
+    return GestureDetector(
+      onTap: isSecure ? null : onSetupTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: borderColor, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: primaryColor.withValues(alpha: isDark ? 0.15 : 0.1),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(icon, size: 28, color: color),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Güvenlik Durumu',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            statusText,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: color,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  // İkon
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          iconBgColor,
+                          iconBgColor.withValues(alpha: 0.8),
                         ],
                       ),
-                    ],
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: iconBgColor.withValues(alpha: 0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, size: 28, color: Colors.white),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Güvenlik Durumu',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: primaryColor,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryColor.withValues(alpha: 0.5),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              statusText,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: primaryColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isSecure
+                    ? 'Verileriniz güvende! Şifreleriniz koruma altında.'
+                    : 'Şifrelerinizi korumak için PIN veya biyometrik doğrulama ayarlayın.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: isDark
+                      ? Colors.white70
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  height: 1.4,
+                ),
+              ),
+              if (isSecure) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onLockTap,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: isDark ? Colors.black : Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.lock_outline),
+                    label: const Text(
+                      'Şimdi Kilitle',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onSetupTap,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: primaryColor,
+                      side: BorderSide(
+                        color: primaryColor.withValues(alpha: 0.5),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.security_rounded),
+                    label: const Text(
+                      'Güvenliği Etkinleştir',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              isSecure
-                  ? 'Verileriniz güvenli. Uygulamayı hemen kilitleyebilirsiniz.'
-                  : 'Verilerinizi korumak için güvenlik ayarlarını etkinleştirin.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (isSecure) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onLockTap,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                  ),
-                  icon: const Icon(Icons.lock_outline),
-                  label: const Text('Şimdi Kilitle'),
-                ),
-              ),
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1284,6 +1466,7 @@ class _SecurityOptionsCard extends StatelessWidget {
     required this.onPinToggle,
     required this.onBiometricToggle,
     required this.onLockNow,
+    this.onOpenBiometricSettings,
   });
 
   final SecurityState securityState;
@@ -1292,6 +1475,7 @@ class _SecurityOptionsCard extends StatelessWidget {
   final ValueChanged<bool> onPinToggle;
   final ValueChanged<bool> onBiometricToggle;
   final VoidCallback? onLockNow;
+  final VoidCallback? onOpenBiometricSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -1339,6 +1523,51 @@ class _SecurityOptionsCard extends StatelessWidget {
                   ),
             showDivider: false,
           ),
+
+          // Biyometrik ayarları yardım butonu
+          if (onOpenBiometricSettings != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: InkWell(
+                onTap: onOpenBiometricSettings,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withValues(
+                      alpha: 0.3,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.help_outline_rounded,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Biyometrik çalışmıyor mu? İzinleri kontrol edin.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 14,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -1607,14 +1836,7 @@ class _AboutCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(
-                  'assets/appicon/flupass.png',
-                  width: 48,
-                  height: 48,
-                ),
-              ),
+              child: const ThemedAppIconMedium(showGlow: true),
             ),
 
             const SizedBox(height: 16),

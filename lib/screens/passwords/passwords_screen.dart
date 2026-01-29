@@ -432,90 +432,98 @@ class _StatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          _StatItem(
-            icon: Icons.lock_outline,
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.lock_rounded,
             value: total.toString(),
-            label: 'Toplam',
+            label: 'Toplam Şifre',
             color: theme.colorScheme.primary,
+            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
           ),
-          Container(
-            width: 1,
-            height: 40,
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-          ),
-          _StatItem(
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
             icon: Icons.star_rounded,
             value: favorites.toString(),
             label: 'Favori',
             color: theme.colorScheme.tertiary,
+            backgroundColor: theme.colorScheme.tertiary.withValues(alpha: 0.1),
           ),
-          if (isFiltered) ...[
-            Container(
-              width: 1,
-              height: 40,
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
-            ),
-            _StatItem(
+        ),
+        if (isFiltered) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatCard(
               icon: Icons.filter_list_rounded,
               value: filtered.toString(),
               label: 'Sonuç',
               color: theme.colorScheme.secondary,
+              backgroundColor: theme.colorScheme.secondary.withValues(
+                alpha: 0.1,
+              ),
             ),
-          ],
+          ),
         ],
-      ),
+      ],
     );
   }
 }
 
-class _StatItem extends StatelessWidget {
-  const _StatItem({
+class _StatCard extends StatelessWidget {
+  const _StatCard({
     required this.icon,
     required this.value,
     required this.label,
     required this.color,
+    required this.backgroundColor,
   });
 
   final IconData icon;
   final String value;
   final String label;
   final Color color;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Expanded(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
         children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 22, color: color),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            value,
+            style: theme.textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -1030,45 +1038,122 @@ class _ModernEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
 
     return SizedBox(
       width: double.infinity,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              primaryColor.withValues(alpha: 0.08),
+              primaryColor.withValues(alpha: 0.03),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: primaryColor.withValues(alpha: 0.15)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
+            // Floating decorative elements
+            SizedBox(
+              height: 100,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Background floating icons
+                  Positioned(
+                    left: 20,
+                    top: 0,
+                    child: _FloatingIcon(
+                      icon: Icons.key_rounded,
+                      color: primaryColor.withValues(alpha: 0.2),
+                      size: 24,
+                    ),
+                  ),
+                  Positioned(
+                    right: 30,
+                    top: 10,
+                    child: _FloatingIcon(
+                      icon: Icons.shield_rounded,
+                      color: primaryColor.withValues(alpha: 0.15),
+                      size: 20,
+                    ),
+                  ),
+                  Positioned(
+                    left: 40,
+                    bottom: 5,
+                    child: _FloatingIcon(
+                      icon: Icons.vpn_key_rounded,
+                      color: primaryColor.withValues(alpha: 0.12),
+                      size: 18,
+                    ),
+                  ),
+                  Positioned(
+                    right: 20,
+                    bottom: 0,
+                    child: _FloatingIcon(
+                      icon: Icons.security_rounded,
+                      color: primaryColor.withValues(alpha: 0.18),
+                      size: 22,
+                    ),
+                  ),
+                  // Main icon
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryColor.withValues(alpha: 0.2),
+                          blurRadius: 20,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, size: 40, color: primaryColor),
+                  ),
+                ],
               ),
-              child: Icon(icon, size: 48, color: theme.colorScheme.primary),
             ),
             const SizedBox(height: 24),
             Text(
               title,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(height: 12),
+            Container(
+              constraints: const BoxConstraints(maxWidth: 280),
+              child: Text(
+                description,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.5,
+                ),
               ),
             ),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 28),
               FilledButton.icon(
                 onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
                 icon: const Icon(Icons.add_rounded),
                 label: Text(actionLabel!),
               ),
@@ -1077,6 +1162,23 @@ class _ModernEmptyState extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _FloatingIcon extends StatelessWidget {
+  const _FloatingIcon({
+    required this.icon,
+    required this.color,
+    required this.size,
+  });
+
+  final IconData icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, size: size, color: color);
   }
 }
 

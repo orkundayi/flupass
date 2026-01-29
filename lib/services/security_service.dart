@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +7,17 @@ final securityControllerProvider =
     NotifierProvider<SecurityController, SecurityState>(SecurityController.new);
 
 enum AuthMethod { none, pin, biometric }
+
+/// Biyometrik kurulum sonuçları
+enum BiometricSetupResult {
+  success, // Başarılı
+  notSupported, // Cihaz biyometrik desteklemiyor
+  notEnrolled, // Parmak izi/Face ID kayıtlı değil
+  permissionDenied, // Kullanıcı izni reddetti (kalıcı)
+  lockedOut, // Çok fazla başarısız deneme
+  cancelled, // Kullanıcı iptal etti
+  failed, // Genel hata
+}
 
 class SecurityState {
   const SecurityState({
@@ -183,32 +192,29 @@ class SecurityController extends Notifier<SecurityState> {
     }
   }
 
-  Future<bool> setupBiometricAuth() async {
+  Future<BiometricSetupResult> setupBiometricAuth() async {
     state = state.copyWith(isInlineAuthInProgress: true);
     try {
       final canCheckBiometrics = await _localAuth.canCheckBiometrics;
       final isDeviceSupported = await _localAuth.isDeviceSupported();
 
       if (!canCheckBiometrics || !isDeviceSupported) {
-        return false;
+        return BiometricSetupResult.notSupported;
       }
 
-      final availableBiometrics = await _localAuth.getAvailableBiometrics();
-      if (availableBiometrics.isEmpty) {
-        return false;
-      }
+      // NOT: iOS'ta Face ID izni reddedildiğinde getAvailableBiometrics() boş döner.
+      // Bu yüzden önce authenticate() çağrısı yapıp hata kodundan sonucu belirliyoruz.
+      // Android'de bu sorun yok.
 
       final authenticated = await _localAuth.authenticate(
         localizedReason:
             'Biyometrik kimlik doğrulamayı etkinleştirmek için doğrulama yapın',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-        ),
+        persistAcrossBackgrounding: true,
+        biometricOnly: true,
       );
 
       if (!authenticated) {
-        return false;
+        return BiometricSetupResult.cancelled;
       }
 
       final prefs = await _ensurePrefs();
@@ -220,15 +226,31 @@ class SecurityController extends Notifier<SecurityState> {
         isSecurityEnabled: true,
         isAuthenticated: true,
         isSecurityActive: false,
+        isInlineAuthInProgress: false,
       );
-      return true;
-    } on PlatformException catch (error) {
+      return BiometricSetupResult.success;
+    } on LocalAuthException catch (error) {
       if (kDebugMode) {
-        print('Biometric setup failed: $error');
+        print('Biometric setup failed: ${error.code}');
       }
-      return false;
+
+      // local_auth 3.0.0 LocalAuthExceptionCode enum kullanıyor
+      // NOT: iOS'ta Face ID izni reddedildiğinde noBiometricHardware hatası
+      // dönebiliyor. Bu yüzden çoğu hatayı permissionDenied olarak işliyoruz
+      // ve kullanıcıya ayarlara gitme seçeneği sunuyoruz.
+      switch (error.code) {
+        case LocalAuthExceptionCode.biometricLockout:
+          return BiometricSetupResult.lockedOut;
+        case LocalAuthExceptionCode.userCanceled:
+          return BiometricSetupResult.cancelled;
+        default:
+          // iOS'ta izin reddi, hardware yok, kayıtlı değil gibi durumların
+          // hepsi benzer hatalar veriyor. Kullanıcıya genel bir mesaj gösterip
+          // ayarlara yönlendirmek en iyi yaklaşım.
+          return BiometricSetupResult.permissionDenied;
+      }
     } catch (_) {
-      return false;
+      return BiometricSetupResult.failed;
     } finally {
       state = state.copyWith(isInlineAuthInProgress: false);
     }
@@ -252,11 +274,8 @@ class SecurityController extends Notifier<SecurityState> {
 
       final authenticated = await _localAuth.authenticate(
         localizedReason: 'Uygulamaya erişmek için biyometrik doğrulama gerekli',
-        options: const AuthenticationOptions(
-          stickyAuth: true,
-          biometricOnly: true,
-          useErrorDialogs: true,
-        ),
+        persistAcrossBackgrounding: true,
+        biometricOnly: true,
       );
 
       if (authenticated) {
@@ -265,15 +284,16 @@ class SecurityController extends Notifier<SecurityState> {
         return true;
       }
       return false;
-    } on PlatformException catch (error) {
+    } on LocalAuthException catch (error) {
       if (kDebugMode) {
-        print('Biometric auth failed: ${error.code} - ${error.message}');
+        print('Biometric auth failed: ${error.code}');
       }
 
+      // Biyometrik artık kullanılamıyorsa kaldır
       const removalCodes = {
-        auth_error.notEnrolled,
-        auth_error.passcodeNotSet,
-        auth_error.otherOperatingSystem,
+        LocalAuthExceptionCode.noBiometricsEnrolled,
+        LocalAuthExceptionCode.noCredentialsSet,
+        LocalAuthExceptionCode.noBiometricHardware,
       };
 
       if (removalCodes.contains(error.code)) {

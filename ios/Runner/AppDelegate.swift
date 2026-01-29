@@ -5,6 +5,7 @@ import UIKit
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private let autofillChannelName = "com.flutech.flupass/autofill"
+  private let settingsChannelName = "com.flutech.flupass/settings"
   private let autofillStore = AutofillCredentialStore()
 
   override func application(
@@ -13,6 +14,7 @@ import UIKit
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     configureAutofillChannel()
+    configureSettingsChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -46,6 +48,46 @@ import UIKit
         self?.handleClearAutofillData(result: result)
       default:
         result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func configureSettingsChannel() {
+    guard
+      let controller = window?.rootViewController as? FlutterViewController
+    else {
+      return
+    }
+
+    let channel = FlutterMethodChannel(
+      name: settingsChannelName,
+      binaryMessenger: controller.binaryMessenger
+    )
+
+    channel.setMethodCallHandler { [weak self] call, result in
+      switch call.method {
+      case "openAppSettings":
+        self?.handleOpenAppSettings(result: result)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func handleOpenAppSettings(result: @escaping FlutterResult) {
+    // Doğrudan FluPass uygulama ayarlarını aç
+    guard let url = URL(string: UIApplication.openSettingsURLString) else {
+      result(false)
+      return
+    }
+
+    DispatchQueue.main.async {
+      if UIApplication.shared.canOpenURL(url) {
+        UIApplication.shared.open(url, options: [:]) { opened in
+          result(opened)
+        }
+      } else {
+        result(false)
       }
     }
   }
