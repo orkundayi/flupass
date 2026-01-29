@@ -1,0 +1,418 @@
+Uygulamanızı otomatik doldurma için optimize etme
+
+bookmark_border
+Standart görünümleri kullanan uygulamalar, özel yapılandırma gerektirmeden otomatik doldurma çerçevesiyle çalışır. Ayrıca, uygulamanızın çerçeveyle çalışma şeklini de optimize edebilirsiniz.
+
+Otomatik doldurma ortamını ayarlama
+Bu bölümde, uygulamanız için temel otomatik doldurma işlevinin nasıl ayarlanacağı açıklanmaktadır.
+
+
+Otomatik doldurma hizmeti yapılandırma
+Uygulamanızın otomatik doldurma çerçevesini kullanabilmesi için cihazınızda bir otomatik doldurma hizmeti yapılandırılmış olmalıdır. Android 8.0 (API düzeyi 26) ve sonraki sürümleri çalıştıran çoğu telefon ve tablette otomatik doldurma hizmeti bulunsa da uygulamanızı test ederken Android otomatik doldurma çerçevesi örneğindeki otomatik doldurma hizmeti gibi bir test hizmeti kullanmanızı öneririz. Bir emülatör kullanırken otomatik doldurma hizmetini açıkça ayarlayın. Emülatörde varsayılan bir hizmet olmayabilir.
+
+Örnek uygulamadan test otomatik doldurma hizmetini yükledikten sonra Ayarlar > Sistem > Diller ve giriş > Gelişmiş > Giriş yardımı > Otomatik doldurma hizmeti'ne giderek otomatik doldurma hizmetini etkinleştirin.
+
+Otomatik doldurmayı test etmek için emülatör yapılandırma hakkında daha fazla bilgi edinmek istiyorsanız Uygulamanızı otomatik doldurma ile test etme başlıklı makaleyi inceleyin.
+
+Otomatik doldurma için ipuçları sağlama
+Otomatik doldurma hizmeti, her görünümün türünü buluşsal yöntemler kullanarak belirler. Ancak uygulamanız bu sezgisel yöntemlere dayanıyorsa uygulamanızı güncellediğinizde otomatik doldurma davranışı beklenmedik şekilde değişebilir. Otomatik doldurma hizmetinin uygulamanızın form faktörlerini doğru şekilde tanımlamasını sağlamak için otomatik doldurma ipuçları sağlayın.
+
+android:autofillHints özelliğini kullanarak otomatik doldurma ipuçları ayarlayabilirsiniz. Aşağıdaki örnekte, EditText üzerinde "password" ipucu ayarlanmaktadır:
+
+
+<EditText
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:autofillHints="password" />
+Ayrıca, aşağıdaki örnekte gösterildiği gibi setAutofillHints() yöntemini kullanarak ipuçlarını programatik olarak da ayarlayabilirsiniz:
+
+Kotlin
+Java
+
+val password = findViewById<EditText>(R.id.password)
+password.setAutofillHints(View.AUTOFILL_HINT_PASSWORD)
+Önceden tanımlanmış ipucu sabitlerini dahil etme
+Otomatik doldurma çerçevesi ipuçlarını doğrulamaz. İpuçları, otomatik doldurma hizmetine değiştirilmeden veya doğrulanmadan iletilir. İstediğiniz değeri kullanabilirsiniz ancak View ve AndroidX HintConstants sınıfları, resmi olarak desteklenen ipucu sabitlerinin listelerini içerir.
+
+Bu sabitleri bir arada kullanarak, yaygın otomatik doldurma senaryoları için düzenler oluşturabilirsiniz:
+
+Hesap kimlik bilgileri
+Oturum açma formuna, hesap kimlik bilgisi ipuçları (ör. AUTOFILL_HINT_USERNAME ve AUTOFILL_HINT_PASSWORD) ekleyebilirsiniz.
+
+Yeni hesap oluştururken veya kullanıcılar kullanıcı adlarını ve şifrelerini değiştirdiğinde AUTOFILL_HINT_NEW_USERNAME ve AUTOFILL_HINT_NEW_PASSWORD kullanabilirsiniz.
+
+Kredi kartı bilgileri
+Kredi kartı bilgisi isterken AUTOFILL_HINT_CREDIT_CARD_NUMBER ve AUTOFILL_HINT_CREDIT_CARD_SECURITY_CODE gibi ipuçlarını kullanabilirsiniz.
+
+Kredi kartı son kullanma tarihleri için aşağıdakilerden birini yapın:
+
+Son kullanma tarihi için tek bir görünüm kullanıyorsanız AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_DATE simgesini kullanın.
+Geçerlilik bitiş tarihinin her bölümü için farklı bir görünüm kullanıyorsanız her görünüm için sırasıyla AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_DAY, AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_MONTH ve AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_YEAR değerlerini kullanabilirsiniz.
+Fiziksel adres
+Fiziksel adres formu alanları için aşağıdaki gibi ipuçları kullanabilirsiniz:
+
+Tek bir görünümdeki adres için AUTOFILL_HINT_POSTAL_ADDRESS simgesini kullanın.
+Bir adresin farklı bölümleri için ayrı görünümler kullanırken aşağıdakileri kullanabilirsiniz:
+AUTOFILL_HINT_POSTAL_ADDRESS_STREET_ADDRESS
+AUTOFILL_HINT_POSTAL_ADDRESS_EXTENDED_ADDRESS
+AUTOFILL_HINT_POSTAL_ADDRESS_LOCALITY
+AUTOFILL_HINT_POSTAL_ADDRESS_REGION
+AUTOFILL_HINT_POSTAL_ADDRESS_COUNTRY
+AUTOFILL_HINT_POSTAL_CODE
+AUTOFILL_HINT_POSTAL_ADDRESS_EXTENDED_POSTAL_CODE
+Kişi adları
+Kullanıcıların adlarını isterken aşağıdaki gibi ipuçlarından yararlanabilirsiniz:
+
+Bir kişinin tam adını tek bir görünümde otomatik olarak doldurmak için AUTOFILL_HINT_PERSON_NAME kullanın.
+Bir adın farklı bölümleri için ayrı görünümler kullanıyorsanız aşağıdakilerden herhangi birini kullanabilirsiniz:
+AUTOFILL_HINT_PERSON_NAME_PREFIX
+AUTOFILL_HINT_PERSON_NAME_GIVEN
+AUTOFILL_HINT_PERSON_NAME_MIDDLE
+AUTOFILL_HINT_PERSON_NAME_MIDDLE_INITIAL
+AUTOFILL_HINT_PERSON_NAME_FAMILY
+AUTOFILL_HINT_PERSON_NAME_SUFFIX
+Not: AUTOFILL_HINT_NAME desteği sonlandırıldı ve yerini AUTOFILL_HINT_PERSON_NAME aldı.
+Telefon numaraları
+Telefon numaraları için şunları kullanabilirsiniz:
+
+Tek bir görünümde tam telefon numarası istenirken AUTOFILL_HINT_PHONE_NUMBER kullanılmalıdır.
+Telefon numarasının farklı bölümleri için ayrı görünümler kullanıyorsanız aşağıdakilerden herhangi birini kullanabilirsiniz:
+AUTOFILL_HINT_PHONE_COUNTRY_CODE
+AUTOFILL_HINT_PHONE_NATIONAL
+AUTOFILL_HINT_PHONE_NUMBER_DEVICE
+Tek kullanımlık şifre (OTP)
+Tek bir görünümde tek kullanımlık şifre için AUTOFILL_HINT_SMS_OTP kullanabilirsiniz.
+
+Her görünümün OTP'nin tek bir rakamıyla eşlendiği birden fazla görünüm için, karakter başına ipuçları oluşturmak üzere generateSmsOtpHintForCharacterPosition() yöntemini kullanabilirsiniz.
+
+Web sitesi ve mobil uygulama verilerini ilişkilendirme
+Google ile otomatik doldurma gibi otomatik doldurma hizmetleri, uygulama ve web sitesi ilişkilendirildikten sonra kullanıcı giriş verilerini tarayıcılar ve Android cihazlar arasında paylaşabilir. Kullanıcı her iki platformda da aynı otomatik doldurma hizmetini seçtiğinde web uygulamanızda oturum açtığında oturum açma kimlik bilgileri, ilgili Android uygulamanızda oturum açtığında otomatik doldurma için kullanılabilir.
+
+Android uygulamanızı web sitenizle ilişkilendirmek için sitenizde delegate_permission/common.get_login_creds ilişkisine sahip bir Digital Asset Link barındırın. Ardından, uygulamanızın AndroidManifest.xml dosyasında ilişkilendirmeyi beyan edin. Web sitenizi Android uygulamanızla ilişkilendirme hakkında ayrıntılı talimatlar için Uygulamalarda ve web sitelerinde otomatik oturum açmayı etkinleştirme başlıklı makaleyi inceleyin.
+
+Otomatik doldurma iş akışını tamamlama
+Bu bölümde, uygulamanızın kullanıcıları için otomatik doldurma işlevini iyileştirmek üzere adım atabileceğiniz belirli senaryolar açıklanmaktadır.
+
+Otomatik doldurmanın etkin olup olmadığını belirleme
+Kullanıcılar, Ayarlar > Sistem > Diller ve giriş > Gelişmiş > Giriş yardımı > Otomatik doldurma hizmeti'ne giderek otomatik doldurmayı etkinleştirebilir veya devre dışı bırakabilir ve otomatik doldurma hizmetini değiştirebilir. Uygulamanız, kullanıcının otomatik doldurma ayarlarını geçersiz kılamaz ancak otomatik doldurma kullanıcının kullanımına sunulmuşsa uygulamanızda veya uygulamanızın belirli görünümlerinde ek otomatik doldurma işlevleri uygulayabilirsiniz.
+
+Örneğin, TextView, kullanıcı için otomatik doldurma etkinse taşma menüsünde otomatik doldurma girişini gösterir. Kullanıcı için otomatik doldurmanın etkin olup olmadığını kontrol etmek üzere AutofillManager nesnesinin isEnabled() yöntemini çağırın.
+
+Kayıt ve giriş deneyiminizin otomatik doldurma özelliği olmayan kullanıcılar için optimize edildiğinden emin olmak istiyorsanız Tek Dokunuşla oturum açma'yı uygulayın.
+
+Otomatik doldurma isteğini zorunlu kılma
+Bazen, kullanıcı işlemi sonucunda otomatik doldurma isteğinin zorunlu olarak gerçekleşmesi gerekir. Örneğin, TextView, kullanıcı görünümde dokunup basılı tutma işlemi yaptığında otomatik doldurma menü öğesi sunar. Aşağıdaki kod örneğinde, otomatik doldurma isteğinin nasıl zorunlu kılınacağı gösterilmektedir:
+
+Kotlin
+Java
+
+fun eventHandler(view: View) {
+    val afm = requireContext().getSystemService(AutofillManager::class.java)
+    afm?.requestAutofill(view)
+}
+Mevcut otomatik doldurma bağlamını iptal etmek için cancel() yöntemini de kullanabilirsiniz. Giriş sayfasındaki alanları temizleyen bir düğmeniz varsa bu özellikten yararlanabilirsiniz.
+
+Seçici kontrollerindeki veriler için doğru otomatik doldurma türünü kullanma
+Seçiciler, tarih veya saat verilerini depolayan bir alanın değerini değiştirmelerine olanak tanıyan bir kullanıcı arayüzü sağlayarak otomatik doldurma işleminde faydalı olabilir. Örneğin, kredi kartı formunda tarih seçici, kullanıcıların kredi kartlarının son kullanma tarihini girmesine veya değiştirmesine olanak tanır. Ancak seçici görünür olmadığında verileri görüntülemek için EditText gibi başka bir görünüm kullanmanız gerekir.
+
+Bir EditText nesnesi, yerel olarak AUTOFILL_TYPE_TEXT türünde otomatik doldurma verileri bekler. Farklı bir veri türü kullanıyorsanız EditText öğesinden devralan ve ilgili veri türünü işlemek için gereken yöntemleri uygulayan özel bir görünüm oluşturun. Örneğin, bir tarih alanınız varsa AUTOFILL_TYPE_DATE türündeki değerleri doğru şekilde işleyen mantıkla yöntemleri uygulayın.
+
+Otomatik doldurma veri türünü belirttiğinizde, otomatik doldurma hizmeti görünümde gösterilen verilerin uygun bir temsilini oluşturabilir. Daha fazla bilgi için Otomatik doldurma ile seçicileri kullanma başlıklı makaleyi inceleyin.
+
+Otomatik doldurma bağlamını tamamlama
+Otomatik doldurma bağlamı tamamlandıktan sonra "Otomatik doldurma için kaydet?" iletişim kutusunu gösteren otomatik doldurma çerçevesi, kullanıcı girişini gelecekte kullanılmak üzere kaydeder. Genellikle, bir etkinlik sona erdiğinde otomatik doldurma bağlamı da sona erer. Ancak, çerçeveye açıkça bildirmeniz gereken bazı durumlar vardır. Örneğin, hem giriş hem de içerik ekranlarınız için aynı etkinliği ancak farklı parçaları kullanıyorsanız. Bu durumlarda, AutofillManager.commit() çağrısı yaparak bağlamı açıkça sonlandırabilirsiniz.
+
+Not: Çok adımlı formlarda, kullanıcı çok adımlı formu tamamlayana kadar commit() çağrısı yapmayın. Örneğin, Fragment kullanıcı adınız ve Fragment şifreniz varsa commit() işlevini çağırmak için şifrenin girilmesini bekleyin.
+Özel görünümler için destek
+Özel görünümler, otomatik doldurma API'sini kullanarak otomatik doldurma çerçevesine sunulan meta verileri belirtebilir. Bazı görünümler, sanal alt öğelerin kapsayıcısı olarak işlev görür. Örneğin, OpenGL ile oluşturulmuş kullanıcı arayüzü içeren görünümler. Bu görünümlerin, otomatik doldurma çerçevesiyle çalışabilmesi için API'yi kullanarak uygulamada kullanılan bilgilerin yapısını belirtmesi gerekir.
+
+Uygulamanızda özel görünümler kullanılıyorsa aşağıdaki senaryoları göz önünde bulundurun:
+
+Özel görünüm, standart görünüm yapısı veya varsayılan görünüm yapısı sağlar.
+Özel görünümde sanal yapı veya otomatik doldurma çerçevesinde kullanılamayan bir görünüm yapısı var.
+Standart görünüm yapısına sahip özel görünümler
+Özel görünümler, otomatik doldurmanın çalışması için gereken meta verileri tanımlayabilir. Özel görünümünüzün, otomatik doldurma çerçevesiyle çalışmak için meta verileri uygun şekilde yönettiğinden emin olun. Özel görünümünüz aşağıdaki işlemleri yapmalıdır:
+
+Çerçevenin uygulamanıza gönderdiği otomatik doldurma değerini işleyin.
+Otomatik doldurma türünü ve değerini çerçeveye sağlayın.
+Otomatik doldurma tetiklendiğinde otomatik doldurma çerçevesi, görünümünüzde autofill() işlevini çağırır ve görünümünüzün kullanması gereken değeri gönderir. Özel görünümünüzün otomatik doldurma değerini nasıl işleyeceğini belirtmek için autofill() öğesini uygulayın.
+
+Görünümünüz, sırasıyla getAutofillType() ve getAutofillValue() yöntemlerini geçersiz kılarak otomatik doldurma türünü ve değerini belirtmelidir.
+
+Son olarak, kullanıcı mevcut durumda görünüm için değer sağlayamıyorsa (ör. görünüm devre dışıysa) otomatik doldurma görünümü doldurmamalıdır. Bu durumlarda getAutofillType(), AUTOFILL_TYPE_NONE değerini döndürmeli, getAutofillValue(), null değerini döndürmeli ve autofill() hiçbir şey yapmamalıdır.
+
+Aşağıdaki durumlarda, çerçevenin içinde düzgün çalışmak için ek adımlar gerekir:
+
+Özel görünüm düzenlenebilir.
+Özel görünüm hassas veriler içeriyor.
+Özel görünüm düzenlenebilir.
+Görünüm düzenlenebiliyorsa AutofillManager nesnesinde notifyValueChanged() çağırarak otomatik doldurma çerçevesini değişiklikler hakkında bilgilendirin.
+
+Özel görünüm hassas veriler içeriyor
+Bir görünümde e-posta adresleri, kredi kartı numaraları ve şifreler gibi kimliği tanımlayabilecek bilgiler (PII) varsa bu görünüm hassas olarak işaretlenmelidir.
+
+Genel olarak, içeriği statik kaynaklardan gelen görünümlerde hassas veriler bulunmaz. İçeriği dinamik olarak ayarlanan görünümlerde ise hassas veriler bulunabilir. Örneğin, kullanıcı adınızı girin ifadesini içeren bir etiket hassas veri içermezken Merhaba, John ifadesini içeren bir etiket hassas veri içerir.
+
+Otomatik doldurma çerçevesi, varsayılan olarak tüm verilerin hassas olduğunu varsayar. Hassas olmayan verileri işaretleyebilirsiniz.
+
+Bir görünümün hassas veriler içerip içermediğini işaretlemek için onProvideAutofillStructure() öğesini uygulayın ve ViewStructure nesnesinde setDataIsSensitive() öğesini çağırın.
+
+Aşağıdaki kod örneğinde, görünüm yapısındaki verilerin nasıl hassas olmayan olarak işaretleneceği gösterilmektedir:
+
+Kotlin
+Java
+
+override fun onProvideAutofillStructure(structure: ViewStructure, flags: Int) {
+    super.onProvideAutofillStructure(structure, flags)
+
+    structure.setDataIsSensitive(false)
+}
+Bir görünüm yalnızca önceden tanımlanmış değerleri kabul ediyorsa görünümü otomatik olarak doldurmak için kullanılabilecek seçenekleri ayarlamak üzere setAutofillOptions() yöntemini kullanabilirsiniz. Özellikle, otomatik doldurma türü AUTOFILL_TYPE_LIST olan görünümler bu yöntemi kullanmalıdır. Çünkü otomatik doldurma hizmeti, görünümü doldurmak için kullanılabilen seçenekleri bilirse daha iyi bir iş çıkarabilir.
+
+Spinner gibi bir adaptör kullanan görünümler de benzer bir durumdur. Örneğin, kredi kartı son kullanma tarihi alanlarında kullanılmak üzere geçerli yıla göre dinamik olarak oluşturulan yıllar sağlayan bir açılır liste, yıl listesi sağlamak için Adapter arayüzünün getAutofillOptions() yöntemini uygulayabilir.
+
+ArrayAdapter kullanan görünümler de değer listeleri sağlayabilir. ArrayAdapter, statik kaynaklar için otomatik doldurma seçeneklerini otomatik olarak ayarlar. Değerleri dinamik olarak sağlıyorsanız getAutofillOptions() değerini geçersiz kılın.
+
+Sanal yapıyla özel görünümler
+Otomatik doldurma çerçevesi, uygulamanızın kullanıcı arayüzündeki bilgileri düzenleyip kaydedebilmek için bir görünüm yapısı gerektirir. Görünüm yapısı aşağıdaki durumlarda çerçeve için kullanılamaz:
+
+Uygulama, kullanıcı arayüzünü oluşturmak için OpenGL gibi alt düzey bir oluşturma motoru kullanıyor.
+Uygulama, kullanıcı arayüzünü çizmek için Canvas örneğini kullanıyor.
+Bu durumlarda, onProvideAutofillVirtualStructure() uygulayarak ve aşağıdaki adımları izleyerek bir görünüm yapısı belirtebilirsiniz:
+
+addChildCount() işlevini çağırarak görünüm yapısının alt öğe sayısını artırın.
+newChild() numaralı telefonu arayarak çocuk ekleyin.
+setAutofillId() işlevini çağırarak alt öğe için otomatik doldurma kimliğini ayarlayın.
+Otomatik doldurma değeri ve türü gibi ilgili özellikleri ayarlayın.
+Sanal çocuktaki veriler hassassa true değerini setDataIsSensitive()'e iletin. Aksi takdirde false değerini iletin.
+Aşağıdaki kod snippet'inde sanal yapıda yeni bir alt öğenin nasıl oluşturulacağı gösterilmektedir:
+
+Kotlin
+Java
+
+override fun onProvideAutofillVirtualStructure(structure: ViewStructure, flags: Int) {
+
+    super.onProvideAutofillVirtualStructure(structure, flags)
+
+    // Create a new child in the virtual structure.
+    structure.addChildCount(1)
+    val child = structure.newChild(childIndex)
+
+    // Set the autofill ID for the child.
+    child.setAutofillId(structure.autofillId!!, childVirtualId)
+
+    // Populate the child by providing properties such as value and type.
+    child.setAutofillValue(childAutofillValue)
+    child.setAutofillType(childAutofillType)
+
+    // Some children can provide a list of values, such as when the child is
+    // a spinner.
+    val childAutofillOptions = arrayOf<CharSequence>("option1", "option2")
+    child.setAutofillOptions(childAutofillOptions)
+
+    // Just like other types of views, mark the data as sensitive when
+    // appropriate.
+    val sensitive = !contentIsSetFromResources()
+    child.setDataIsSensitive(sensitive)
+}
+Sanal yapıdaki öğeler değiştiğinde aşağıdaki görevleri gerçekleştirerek çerçeveyi bilgilendirin:
+
+Çocukların odak noktası değişirse AutofillManager nesnesinde notifyViewEntered() ve notifyViewExited() yöntemlerini çağırın.
+Bir alt öğenin değeri değişirse AutofillManager nesnesinde notifyValueChanged() işlevini çağırın.
+Kullanıcı, iş akışındaki bir adımı tamamladığı için görünüm hiyerarşisi artık kullanılamıyorsa (ör. giriş formu kullanarak giriş yaptığında) AutofillManager nesnesinde commit() işlevini çağırın.
+Kullanıcı iş akışındaki bir adımı iptal ettiği için görünüm hiyerarşisi geçerli değilse (ör. kullanıcı bir giriş formunu temizleyen düğmeye dokunduğunda) AutofillManager nesnesinde cancel() işlevini çağırın.
+Otomatik doldurma etkinliklerinde geri çağırmaları kullanma
+Uygulamanız kendi otomatik tamamlama görünümlerini sağlıyorsa kullanıcı arayüzü otomatik doldurma işlevindeki değişikliklere yanıt olarak görünümleri etkinleştirmesini veya devre dışı bırakmasını söyleyen bir mekanizmaya ihtiyacınız vardır. Otomatik doldurma çerçevesi, bu mekanizmayı AutofillCallback şeklinde sağlar.
+
+Bu sınıf, bir görünümle ilişkili otomatik doldurma durumunda değişiklik yapıldıktan sonra uygulamanın çağırdığı onAutofillEvent(View, int) yöntemini sağlar. Bu yöntemin, uygulamanızın sanal görünümlerle kullanabileceği bir childId parametresi içeren aşırı yüklenmiş bir sürümü de vardır. Kullanılabilir durumlar, geri çağırmada sabitler olarak tanımlanır.
+
+AutofillManager sınıfının registerCallback() yöntemini kullanarak geri arama kaydı oluşturabilirsiniz. Aşağıdaki kod örneğinde, otomatik doldurma etkinlikleri için geri çağırma işlevinin nasıl bildirileceği gösterilmektedir:
+
+Kotlin
+Java
+
+val afm = context.getSystemService(AutofillManager::class.java)
+
+afm?.registerCallback(object : AutofillManager.AutofillCallback() {
+    // For virtual structures, override
+    // onAutofillEvent(View view, int childId, int event) instead.
+    override fun onAutofillEvent(view: View, event: Int) {
+        super.onAutofillEvent(view, event)
+        when (event) {
+            EVENT_INPUT_HIDDEN -> {
+                // The autofill affordance associated with the view was hidden.
+            }
+            EVENT_INPUT_SHOWN -> {
+                // The autofill affordance associated with the view was shown.
+            }
+            EVENT_INPUT_UNAVAILABLE -> {
+                // Autofill isn't available.
+            }
+        }
+
+    }
+})
+Geri aramayı kaldırma zamanı geldiğinde unregisterCallback() yöntemini kullanın.
+
+Otomatik doldurma vurgulu çizilebilir öğesini özelleştirme
+Bir görünüm otomatik olarak doldurulduğunda, platform görünüm içeriklerinin otomatik olarak doldurulduğunu belirtmek için görünümün üzerinde bir Drawable oluşturur. Bu çizilebilir öğe, varsayılan olarak arka planları çizmek için kullanılan tema renginden biraz daha koyu, yarı saydam bir renge sahip düz bir dikdörtgendir. Çizilebilir öğenin değiştirilmesi gerekmez ancak uygulamanın veya etkinliğin kullandığı tema öğesinin android:autofilledHighlight öğesi geçersiz kılınarak özelleştirilebilir. Bu örnekte gösterildiği gibi:
+
+res/values/styles.xml
+
+
+<resources>
+    <style name="MyAutofilledHighlight" parent="...">
+        <item name="android:autofilledHighlight">@drawable/my_drawable</item>
+    </style>
+</resources>
+res/drawable/my_drawable.xml
+
+
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#4DFF0000" />
+</shape>
+AndroidManifest.xml
+
+
+<application ...
+    android:theme="@style/MyAutofilledHighlight">
+<!-- or -->
+<activity ...
+    android:theme="@style/MyAutofilledHighlight">
+Not: Bu çizilebilir öğeyi özelleştirirken rengin yarı saydam olması için rengin ilk iki baytını ayarlayın. Aksi takdirde, otomatik olarak doldurulan metin görünmez.
+Otomatik doldurma için kimlik doğrulaması yapma
+Otomatik doldurma hizmeti, uygulamanızdaki alanları tamamlamadan önce kullanıcının kimliğini doğrulamasını isteyebilir. Bu durumda Android sistemi, hizmetin kimlik doğrulama etkinliğini etkinliğinizin yığını kapsamında başlatır.
+
+Kimlik doğrulama hizmet içinde gerçekleştiği için kimlik doğrulamayı desteklemek üzere uygulamanızı güncellemeniz gerekmez. Ancak, etkinliğin yeniden başlatılması durumunda etkinliğin görünüm yapısının korunmasını sağlamanız gerekir. Örneğin, görünüm yapısını onStart() veya onResume() içinde değil, onCreate() içinde oluşturarak bunu sağlayabilirsiniz.
+
+Otomatik doldurma hizmeti kimlik doğrulama gerektirdiğinde uygulamanızın nasıl davrandığını, AutofillFramework örneğindeki HeuristicsService'i kullanarak ve doldurma yanıtı kimlik doğrulaması gerektirecek şekilde yapılandırarak doğrulayabilirsiniz. Bu sorunu taklit etmek için BadViewStructureCreationSignInActivity örneğini de kullanabilirsiniz.
+
+Geri dönüştürülmüş görünümlere otomatik doldurma kimlikleri atama
+Görünümleri geri dönüştüren kapsayıcılar (ör. RecyclerView sınıfı), büyük veri kümelerine dayalı olarak öğelerin kaydırılan listelerini göstermesi gereken uygulamalar için kullanışlıdır. Kapsayıcı kaydırıldığında sistem, düzendeki görünümleri yeniden kullanır ancak görünümler daha sonra yeni içerik barındırır.
+
+Geri dönüştürülmüş bir görünümün ilk içerikleri doldurulursa otomatik doldurma hizmeti, otomatik doldurma kimliklerini kullanarak görünümlerin mantıksal anlamını korur. Sistem, düzendeki görünümleri yeniden kullandığında görünümlerin mantıksal kimlikleri aynı kalır. Bu durum, yanlış otomatik doldurma kullanıcı verilerinin bir otomatik doldurma kimliğiyle ilişkilendirilmesine neden olur.
+
+Android 9 (API düzeyi 28) ve sonraki sürümleri çalıştıran cihazlarda bu sorunu çözmek için aşağıdaki yöntemleri kullanarak RecyclerView tarafından kullanılan görünümlerin otomatik doldurma kimliğini açıkça yönetin:
+
+getNextAutofillId() yöntemi, etkinliğe özgü yeni bir otomatik doldurma kimliği alır.
+setAutofillId() yöntemi, etkinlikteki bu görünümün benzersiz ve mantıksal otomatik doldurma kimliğini ayarlar.
+Bilinen sorunları giderme
+Bu bölümde, otomatik doldurma çerçevesindeki bilinen sorunlara yönelik geçici çözümler sunulmaktadır.
+
+Otomatik doldurma, uygulamaların Android 8.0 ve 8.1'de kilitlenmesine neden oluyor
+Android 8.0 (API düzeyi 26) ve 8.1 (API düzeyi 27) sürümlerinde otomatik doldurma, belirli senaryolarda uygulamanızın kilitlenmesine neden olabilir. Olası sorunları önlemek için otomatik olarak doldurulmayan tüm görünümleri importantForAutofill=no ile etiketleyin. Ayrıca, etkinliğin tamamını importantForAutofill=noExcludeDescendants ile etiketleyebilirsiniz.
+
+Not: Kullanıcıların çalışmasını beklediği alanlarda (ör. şifre veya kredi kartı numarası) otomatik doldurma özelliğini devre dışı bırakmak kötü bir kullanıcı deneyimine neden olabilir. Bu nedenle, özelliği devre dışı bırakırken dikkatli olun.
+Yeniden boyutlandırılan iletişim kutuları, otomatik doldurma için dikkate alınmaz
+Android 8.1 (API düzeyi 27) ve önceki sürümlerde, bir iletişim kutusundaki görünüm, zaten gösterildikten sonra yeniden boyutlandırılırsa görünüm otomatik doldurma için dikkate alınmaz. Bu görünümler, Android sisteminin otomatik doldurma hizmetine gönderdiği AssistStructure nesnesine dahil edilmez. Bu nedenle hizmet, görünümleri dolduramaz.
+
+Bu sorunu çözmek için iletişim penceresi parametrelerinin token özelliğini, iletişim penceresini oluşturan etkinliğin token özelliğiyle değiştirin. Otomatik doldurmanın etkin olduğunu doğruladıktan sonra pencere parametrelerini, onWindowAttributesChanged() Dialog sınıfından devralan sınıfın yönteminde kaydedin. Ardından, kaydedilen parametrelerin token özelliğini, onAttachedToWindow() yöntemindeki üst etkinliğin token özelliğiyle değiştirin.
+
+Aşağıdaki kod snippet'inde bu geçici çözümü uygulayan bir sınıf gösterilmektedir:
+
+Kotlin
+Java
+
+class MyDialog(context: Context) : Dialog(context) {
+
+    // Used to store the dialog window parameters.
+    private var token: IBinder? = null
+
+    private val isDialogResizedWorkaroundRequired: Boolean
+        get() {
+            if (Build.VERSION.SDK_INT != Build.VERSION_CODES.O || Build.VERSION.SDK_INT != Build.VERSION_CODES.O_MR1) {
+                return false
+            }
+            val autofillManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                context.getSystemService(AutofillManager::class.java)
+            } else {
+                null
+            }
+            return autofillManager?.isEnabled ?: false
+        }
+
+    override fun onWindowAttributesChanged(params: WindowManager.LayoutParams) {
+        if (params.token == null && token != null) {
+            params.token = token
+        }
+
+        super.onWindowAttributesChanged(params)
+    }
+
+    override fun onAttachedToWindow() {
+        if (isDialogResizedWorkaroundRequired) {
+            token = ownerActivity!!.window.attributes.token
+        }
+
+        super.onAttachedToWindow()
+    }
+
+}
+Gereksiz işlemleri önlemek için aşağıdaki kod snippet'inde, cihazda otomatik doldurmanın desteklenip desteklenmediği ve mevcut kullanıcı için etkinleştirilip etkinleştirilmediği ile bu geçici çözümün gerekli olup olmadığı nasıl kontrol edileceği gösterilmektedir:
+
+Kotlin
+Java
+
+// AutofillExtensions.kt
+
+fun Context.isDialogResizedWorkaroundRequired(): Boolean {
+    // After the issue is resolved on Android, check whether the
+    // workaround is still required for the current device.
+    return isAutofillAvailable()
+}
+
+fun Context.isAutofillAvailable(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        // The autofill framework is available on Android 8.0
+        // or higher.
+        return false
+    }
+
+    val afm = getSystemService(AutofillManager::class.java)
+    // Return true if autofill is supported by the device and enabled
+    // for the current user.
+    return afm != null && afm.isEnabled
+}
+Uygulamanızı otomatik doldurma özelliğiyle test etme
+Uygulamanızı otomatik doldurma hizmetleriyle çalışacak şekilde optimize ettikten sonra, otomatik doldurma hizmetleriyle beklendiği gibi çalışıp çalışmadığını test edin.
+
+Uygulamanızı test etmek için Android 8.0 (API düzeyi 26) veya sonraki bir sürümün yüklü olduğu bir emülatör ya da fiziksel cihaz kullanın. Emülatör oluşturma hakkında daha fazla bilgi için Sanal cihaz oluşturma ve yönetme başlıklı makaleyi inceleyin.
+
+Otomatik doldurma hizmeti yükleme
+Uygulamanızı otomatik doldurma özelliğiyle test edebilmek için önce otomatik doldurma hizmetleri sağlayan başka bir uygulama yüklemeniz gerekir. Bu amaçla üçüncü taraf uygulamalarını kullanabilirsiniz ancak üçüncü taraf hizmetlerine kaydolmanıza gerek kalmaması için örnek bir otomatik doldurma hizmeti kullanmak daha kolaydır.
+
+Uygulamanızı otomatik doldurma hizmetleriyle test etmek için Java'daki Android otomatik doldurma çerçevesi örneğini kullanabilirsiniz. Örnek uygulama, uygulamanızda kullanmadan önce iş akışını test etmek için kullanabileceğiniz bir otomatik doldurma hizmeti ve istemci Activity sınıfları sağlar. Bu sayfada, android-AutofillFramework örnek uygulamasına referans verilmektedir.
+
+Uygulamayı yükledikten sonra, emülatörün sistem ayarlarında otomatik doldurma hizmetini etkinleştirin. Bunun için Ayarlar > Sistem > Diller ve giriş > Gelişmiş > Giriş yardımı > Otomatik doldurma hizmeti'ne gidin.
+
+Veri şartlarını analiz etme
+Uygulamanızı otomatik doldurma hizmetiyle test etmek için hizmetin, uygulamanızı doldurmak üzere kullanabileceği verilere sahip olması gerekir. Hizmetin ayrıca uygulamanızın görünümlerinde hangi tür verilerin beklendiğini anlaması gerekir. Örneğin, uygulamanızda kullanıcı adı bekleyen bir görünüm varsa hizmetin, kullanıcı adı içeren bir veri kümesine ve görünümün bu tür veriler beklediğini bilmesini sağlayacak bir mekanizmaya sahip olması gerekir.
+
+android:autofillHints özelliğini ayarlayarak hizmete görünümlerinizde hangi tür verilerin beklendiğini söyleyin. Bazı hizmetler, veri türünü belirlemek için gelişmiş sezgisel yöntemler kullanır. Ancak örnek uygulama gibi diğer hizmetler, bu bilgileri sağlaması için geliştiriciye güvenir. Otomatik doldurma için alakalı olan görünümlerde android:autofillHints özelliğini ayarlarsanız uygulamanız otomatik doldurma hizmetleriyle daha iyi çalışır.
+
+Testinizi çalıştırma
+Veri gereksinimlerini analiz ettikten sonra testinizi çalıştırabilirsiniz. Bu test kapsamında, otomatik doldurma hizmetine test verileri kaydedilir ve uygulamanızda otomatik doldurma tetiklenir.
+
+Verileri hizmete kaydetme
+Şu anda etkin olan otomatik doldurma hizmetine veri kaydetmek için aşağıdakileri yapın:
+
+Testiniz sırasında kullanmak istediğiniz veri türünü bekleyen bir görünüm içeren uygulamayı açın. android-AutofillFramework örnek uygulaması, kredi kartı numaraları ve kullanıcı adları gibi çeşitli veri türlerinin beklendiği görünümlere sahip kullanıcı arayüzü sağlar.
+İhtiyacınız olan veri türünü içeren görünüme dokunun.
+Görünüme bir değer girin.
+Oturum aç veya Gönder gibi onay düğmesine dokunun. Genellikle hizmet verileri kaydetmeden önce formu göndermeniz gerekir.
+Sistem iletişim kutusundan izin isteğini doğrulayın. Sistem iletişim kutusunda, şu anda etkin olan hizmetin adı gösterilir ve testinizde kullanmak istediğiniz hizmetin bu olup olmadığı sorulur. Hizmeti kullanmak istiyorsanız Kaydet'e dokunun.
+Android izin iletişim kutusunu göstermiyorsa veya hizmet, testinizde kullanmak istediğiniz hizmet değilse hizmetin şu anda sistem ayarlarında etkin olup olmadığını kontrol edin.
+
+Uygulamanızda otomatik doldurmayı tetikleme
+Uygulamanızda otomatik doldurmayı tetiklemek için aşağıdakileri yapın:
+
+Uygulamanızı açın ve test etmek istediğiniz görünümlerin bulunduğu etkinliğe gidin.
+Doldurulması gereken görünüme dokunun.
+Sistem, görünümü doldurabilecek veri kümelerini içeren otomatik doldurma kullanıcı arayüzünü Şekil 1'de gösterildiği gibi görüntüler.
+Kullanmak istediğiniz verileri içeren veri kümesine dokunun. Görünüm, daha önce hizmette depolanan verileri gösterir.
+Otomatik doldurma kullanıcı arayüzünde "dataset-2" kullanılabilir veri kümesi olarak gösteriliyor
+1. şekil. Mevcut veri kümelerini gösteren otomatik doldurma kullanıcı arayüzü.
+Android, otomatik doldurma kullanıcı arayüzünü göstermiyorsa aşağıdaki sorun giderme seçeneklerini deneyebilirsiniz:
+
+Uygulamanızdaki görünümlerin android:autofillHints özelliğinde doğru değeri kullandığından emin olun. Özelliğin olası değerlerinin listesi için View sınıfındaki AUTOFILL_HINT ile başlayan sabitlere bakın.
+Doldurulması gereken görünümde android:importantForAutofill özelliğinin no dışında bir değere ayarlandığını veya görünümde ya da üst öğelerinden birinde noExcludeDescendants dışında bir değere ayarlandığını kontrol edin.

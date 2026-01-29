@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="autofill_service_label">FluPass Autofill</string>
+    <string name="autofill_service_description">FluPass şifrelerini uygulamalar ve web siteleri için öner.</string>
+    <string name="autofill_show_all_label">Tüm hesapları göster</string>
+    <string name="autofill_show_all_subtitle">Tüm FluPass kayıtlarını aç</string>
+    <string name="autofill_show_domain_label">Bu siteye ait olanları göster</string>
+    <string name="autofill_search_hint">Şifrelerde ara</string>
+    <string name="autofill_empty_search">Eşleşme bulunamadı.</string>
+    <string name="autofill_brand">FluPass</string>
+    <string name="autofill_chooser_title">Hesap seç</string>
+    <string name="autofill_chooser_message">FluPass\'ta saklanan hesaplardan birini seçerek formu hızla doldurun.</string>
+    <string name="autofill_chooser_message_domain">%1$s için FluPass\'ta saklanan hesaplardan birini seçin.</string>
+    <string name="autofill_chooser_empty">Bu uygulama için kayıt bulunamadı.</string>
+    <string name="autofill_chooser_empty_domain">FluPass\'ta %1$s için kayıtlı hesap bulunamadı.</string>
+    <string name="autofill_close_content_description">Kapat</string>
+    <string name="biometric_prompt_title">Kimlik doğrulama</string>
+    <string name="biometric_prompt_subtitle">Şifreye erişmek için doğrulayın</string>
+    <string name="biometric_prompt_cancel">İptal</string>
+</resources>

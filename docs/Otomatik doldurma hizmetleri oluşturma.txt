@@ -1,0 +1,562 @@
+Otomatik doldurma hizmetleri oluşturma
+
+bookmark_border
+Otomatik doldurma hizmeti, diğer uygulamaların görünümlerine veri yerleştirerek kullanıcıların formları daha kolay doldurmasını sağlayan bir uygulamadır. Otomatik doldurma hizmetleri, uygulamalardaki görünümlerden kullanıcı verilerini de alabilir ve daha sonra kullanmak üzere saklayabilir. Otomatik doldurma hizmetleri genellikle kullanıcı verilerini yöneten uygulamalar (ör. şifre yöneticileri) tarafından sağlanır.
+
+Android, Android 8.0 (API düzeyi 26) ve sonraki sürümlerde kullanılabilen otomatik doldurma çerçevesiyle form doldurmayı kolaylaştırır. Kullanıcılar, cihazlarında otomatik doldurma hizmetleri sağlayan bir uygulama varsa otomatik doldurma özelliklerinden yararlanabilir.
+
+Bu sayfada, uygulamanızda otomatik doldurma hizmetinin nasıl uygulanacağı gösterilmektedir. Hizmetin nasıl uygulanacağını gösteren bir kod örneği arıyorsanız Java veya Kotlin'deki AutofillFramework örneğine bakın. Otomatik doldurma hizmetlerinin işleyiş şekli hakkında daha fazla bilgi için AutofillService ve AutofillManager sınıflarının referans sayfalarına bakın.
+
+Not: Android 11'den itibaren platform, klavyelerin ve diğer giriş yöntemi düzenleyicilerinin (IME'ler) açılır menü kullanmak yerine otomatik doldurma önerilerini satır içi olarak göstermesine olanak tanır. Otomatik doldurma hizmetinizin bu işlevi nasıl destekleyebileceği hakkında daha fazla bilgi için Otomatik doldurmayı klavyelerle entegre etme başlıklı makaleyi inceleyin.
+Not: Otomatik doldurma hizmeti, bilgileri öneri sunma dışında bir amaçla kullanmamalıdır.
+Manifest bildirimleri ve izinleri
+Otomatik doldurma hizmetleri sunan uygulamalar, hizmetin uygulanmasını açıklayan bir beyan içermelidir. Bildirimi belirtmek için uygulama manifestine bir <service> öğesi ekleyin. <service> öğesi aşağıdaki özellikleri ve öğeleri içermelidir:
+
+Hizmeti uygulayan uygulamadaki AutofillService alt sınıfını gösteren android:name özelliği.
+android:permission BIND_AUTOFILL_SERVICE iznini beyan eden özellik.
+Zorunlu <intent-filter> öğesi. Bu öğenin <action> alt öğesi, android.service.autofill.AutofillService işlemini belirtir.
+Hizmet için ek yapılandırma parametreleri sağlamak üzere kullanabileceğiniz isteğe bağlı <meta-data> öğesi.
+Aşağıdaki örnekte bir otomatik doldurma hizmeti bildirimi gösterilmektedir:
+
+
+<service
+    android:name=".MyAutofillService"
+    android:label="My Autofill Service"
+    android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+    <intent-filter>
+        <action android:name="android.service.autofill.AutofillService" />
+    </intent-filter>
+    <meta-data
+        android:name="android.autofill"
+        android:resource="@xml/service_configuration" />
+</service>
+<meta-data> öğesi, hizmetle ilgili daha fazla ayrıntı içeren bir XML kaynağını işaret eden bir android:resource özelliği içerir. Önceki örnekteki service_configuration kaynağı, kullanıcıların hizmeti yapılandırmasına olanak tanıyan bir etkinliği belirtir. Aşağıdaki örnekte service_configuration XML kaynağı gösterilmektedir:
+
+
+<autofill-service
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  android:settingsActivity="com.example.android.SettingsActivity" />
+XML kaynakları hakkında daha fazla bilgi için Uygulama kaynaklarına genel bakış başlıklı makaleyi inceleyin.
+
+Hizmeti etkinleştirme istemi
+Bir uygulama, BIND_AUTOFILL_SERVICE iznini bildirdikten ve kullanıcı cihaz ayarlarında bu izni etkinleştirdikten sonra otomatik doldurma hizmeti olarak kullanılır. Bir uygulama, AutofillManager sınıfının hasEnabledAutofillServices() yöntemini çağırarak şu anda etkinleştirilmiş hizmet olup olmadığını doğrulayabilir.
+
+Uygulama, mevcut otomatik doldurma hizmeti değilse ACTION_REQUEST_SET_AUTOFILL_SERVICE amacını kullanarak kullanıcının otomatik doldurma ayarlarını değiştirmesini isteyebilir. Kullanıcı, arayanın paketiyle eşleşen bir otomatik doldurma hizmeti seçerse amaç RESULT_OK değerini döndürür.
+
+Not: Uygulamanızın otomatik doldurma ayarlarını değiştirme isteklerinin sıklığına dikkat edin. Kullanıcıların uygulamanızla etkileşimlerini analiz edin ve yalnızca uygun senaryolarda ayarları değiştirmelerini isteyin.
+Müşteri görüntülemelerini doldurma
+Otomatik doldurma hizmeti, kullanıcı diğer uygulamalarla etkileşime girdiğinde istemci görünümlerini doldurma istekleri alır. Otomatik doldurma hizmetinde isteği karşılayan kullanıcı verileri varsa yanıtta bu veriler gönderilir. Android sistemi, Şekil 1'de gösterildiği gibi, mevcut verileri içeren bir otomatik doldurma kullanıcı arayüzü gösterir:
+
+Otomatik doldurma kullanıcı arayüzü
+
+1.şekil Bir veri kümesini gösteren otomatik doldurma kullanıcı arayüzü.
+
+Otomatik doldurma çerçevesi, Android sisteminin otomatik doldurma hizmetine bağlı olduğu süreyi en aza indirecek şekilde tasarlanmış, görünümleri doldurmaya yönelik bir iş akışı tanımlar. Android sistemi, her istekte AssistStructure nesnesini onFillRequest() yöntemini çağırarak hizmete gönderir.
+
+Otomatik doldurma hizmeti, daha önce depoladığı kullanıcı verileriyle isteği karşılayıp karşılayamayacağını kontrol eder. İsteği karşılayabiliyorsa hizmet, verileri Dataset nesneleri halinde paketler. Hizmet, Dataset nesnelerini içeren bir FillResponse nesnesi ileterek onSuccess() yöntemini çağırır. Hizmette isteği karşılayacak veri yoksa null, onSuccess() yöntemine iletilir.
+
+İstek işlenirken bir hata oluşursa hizmet, onFailure() yöntemini çağırır. İş akışıyla ilgili ayrıntılı açıklama için AutofillService referans sayfasındaki açıklamaya bakın.
+
+Not: Android 10'dan itibaren, otomatik doldurma isteğinin uyumluluk modu üzerinden oluşturulup oluşturulmadığını belirlemek için FillRequest.FLAG_COMPATIBILITY_MODE_REQUEST işaretini kullanabilirsiniz.
+Aşağıdaki kodda onFillRequest() yönteminin bir örneği gösterilmektedir:
+
+Kotlin
+Java
+
+override fun onFillRequest(
+    request: FillRequest,
+    cancellationSignal: CancellationSignal,
+    callback: FillCallback
+) {
+    // Get the structure from the request
+    val context: List<FillContext> = request.fillContexts
+    val structure: AssistStructure = context[context.size - 1].structure
+
+    // Traverse the structure looking for nodes to fill out
+    val parsedStructure: ParsedStructure = parseStructure(structure)
+
+    // Fetch user data that matches the fields
+    val (username: String, password: String) = fetchUserData(parsedStructure)
+
+    // Build the presentation of the datasets
+    val usernamePresentation = RemoteViews(packageName, android.R.layout.simple_list_item_1)
+    usernamePresentation.setTextViewText(android.R.id.text1, "my_username")
+    val passwordPresentation = RemoteViews(packageName, android.R.layout.simple_list_item_1)
+    passwordPresentation.setTextViewText(android.R.id.text1, "Password for my_username")
+
+    // Add a dataset to the response
+    val fillResponse: FillResponse = FillResponse.Builder()
+            .addDataset(Dataset.Builder()
+                    .setValue(
+                            parsedStructure.usernameId,
+                            AutofillValue.forText(username),
+                            usernamePresentation
+                    )
+                    .setValue(
+                            parsedStructure.passwordId,
+                            AutofillValue.forText(password),
+                            passwordPresentation
+                    )
+                    .build())
+            .build()
+
+    // If there are no errors, call onSuccess() and pass the response
+    callback.onSuccess(fillResponse)
+}
+
+data class ParsedStructure(var usernameId: AutofillId, var passwordId: AutofillId)
+
+data class UserData(var username: String, var password: String)
+Bir hizmet, isteği karşılayan birden fazla veri kümesine sahip olabilir. Bu durumda, Android sistemi otomatik doldurma kullanıcı arayüzünde her veri kümesi için bir tane olmak üzere birden fazla seçenek gösterir. Aşağıdaki kod örneğinde, yanıtta birden fazla veri kümesinin nasıl sağlanacağı gösterilmektedir:
+
+Kotlin
+Java
+
+// Add multiple datasets to the response
+val fillResponse: FillResponse = FillResponse.Builder()
+        .addDataset(Dataset.Builder()
+                .setValue(parsedStructure.usernameId,
+                        AutofillValue.forText(user1Data.username), username1Presentation)
+                .setValue(parsedStructure.passwordId,
+                        AutofillValue.forText(user1Data.password), password1Presentation)
+                .build())
+        .addDataset(Dataset.Builder()
+                .setValue(parsedStructure.usernameId,
+                        AutofillValue.forText(user2Data.username), username2Presentation)
+                .setValue(parsedStructure.passwordId,
+                        AutofillValue.forText(user2Data.password), password2Presentation)
+                .build())
+        .build()
+Otomatik doldurma hizmetleri, isteği karşılamak için gereken otomatik doldurma verilerini almak üzere AssistStructure içindeki ViewNode nesnelerinde gezinebilir. Bir hizmet, ViewNode sınıfının getAutofillId() gibi yöntemlerini kullanarak otomatik doldurma verilerini alabilir.
+
+Bir hizmetin, isteği karşılayıp karşılayamayacağını kontrol etmek için görünümün içeriğini açıklayabilmesi gerekir. autofillHints özelliğini kullanmak, bir hizmetin görünüm içeriklerini açıklamak için kullanması gereken ilk yaklaşımdır. Ancak istemci uygulamaları, hizmette kullanılabilir hale gelmeden önce bu özelliği görünümlerinde açıkça sağlamalıdır.
+
+Bir istemci uygulaması autofillHints özelliğini sağlamıyorsa bir hizmet, içeriği açıklamak için kendi sezgisel yöntemlerini kullanmalıdır. Hizmet, görünümün içeriği hakkında bilgi almak için getText() veya getHint() gibi diğer sınıflardaki yöntemleri kullanabilir. Daha fazla bilgi için Otomatik doldurma için ipuçları sağlama başlıklı makaleyi inceleyin.
+
+Aşağıdaki örnekte, AssistStructure öğesinde nasıl gezinileceği ve ViewNode nesnesinden otomatik doldurma verilerinin nasıl alınacağı gösterilmektedir:
+
+Kotlin
+Java
+
+fun traverseStructure(structure: AssistStructure) {
+    val windowNodes: List<AssistStructure.WindowNode> =
+            structure.run {
+                (0 until windowNodeCount).map { getWindowNodeAt(it) }
+            }
+
+    windowNodes.forEach { windowNode: AssistStructure.WindowNode ->
+        val viewNode: ViewNode? = windowNode.rootViewNode
+        traverseNode(viewNode)
+    }
+}
+
+fun traverseNode(viewNode: ViewNode?) {
+    if (viewNode?.autofillHints?.isNotEmpty() == true) {
+        // If the client app provides autofill hints, you can obtain them using
+        // viewNode.getAutofillHints();
+    } else {
+        // Or use your own heuristics to describe the contents of a view
+        // using methods such as getText() or getHint()
+    }
+
+    val children: List<ViewNode>? =
+            viewNode?.run {
+                (0 until childCount).map { getChildAt(it) }
+            }
+
+    children?.forEach { childNode: ViewNode ->
+        traverseNode(childNode)
+    }
+}
+Not: Çoğu görünüm, View sınıfında yer alan AUTOFILL_HINT değerleri listesine uygun autofillHints özellikleri sağlar. Ancak HtmlInfo gibi görünümlerin, W3C otomatik tamamlama özelliği sayfasında listelenen özelliklere uygun olma olasılığı daha yüksektir.
+Kullanıcı verilerini kaydetme
+Otomatik doldurma hizmetinin, uygulamalardaki görünümleri doldurmak için kullanıcı verilerine ihtiyacı vardır. Kullanıcılar bir görünümü manuel olarak doldurduğunda Şekil 2'de gösterildiği gibi verileri mevcut otomatik doldurma hizmetine kaydetmeleri istenir.
+
+Otomatik doldurma kaydetme kullanıcı arayüzü
+
+Şekil 2. Otomatik doldurma kaydetme kullanıcı arayüzü.
+
+Verilerin kaydedilmesi için hizmetin, verileri gelecekte kullanmak üzere depolamak istediğini belirtmesi gerekir. Android sistemi verileri kaydetme isteği göndermeden önce, hizmetin görünümleri doldurma fırsatı bulduğu bir doldurma isteği vardır. Verileri kaydetmek istediğini belirtmek için hizmet, doldurma isteğine verilen yanıta bir SaveInfo nesnesi ekler. SaveInfo nesnesi en azından aşağıdaki verileri içermelidir:
+
+Kaydedilen kullanıcı verilerinin türü. Kullanılabilir SAVE_DATA değerlerinin listesi için SaveInfo bölümüne bakın.
+Kaydetme isteğini tetiklemek için değiştirilmesi gereken minimum görünüm grubu. Örneğin, bir giriş formu genellikle kullanıcının kaydetme isteğini tetiklemek için username ve password görünümlerini güncellemesini gerektirir.
+Aşağıdaki kod örneğinde gösterildiği gibi, bir SaveInfo nesnesi bir FillResponse nesnesiyle ilişkilendirilir:
+
+Kotlin
+Java
+
+override fun onFillRequest(
+    request: FillRequest,
+    cancellationSignal: CancellationSignal,
+    callback: FillCallback
+) {
+    ...
+    // Builder object requires a non-null presentation
+    val notUsed = RemoteViews(packageName, android.R.layout.simple_list_item_1)
+
+    val fillResponse: FillResponse = FillResponse.Builder()
+            .addDataset(
+                    Dataset.Builder()
+                            .setValue(parsedStructure.usernameId, null, notUsed)
+                            .setValue(parsedStructure.passwordId, null, notUsed)
+                            .build()
+            )
+            .setSaveInfo(
+                    SaveInfo.Builder(
+                            SaveInfo.SAVE_DATA_TYPE_USERNAME or SaveInfo.SAVE_DATA_TYPE_PASSWORD,
+                            arrayOf(parsedStructure.usernameId, parsedStructure.passwordId)
+                    ).build()
+            )
+            .build()
+    ...
+}
+Otomatik doldurma hizmeti, kullanıcı verilerini onSaveRequest() yönteminde kalıcı hale getirmek için mantık uygulayabilir. Bu yöntem genellikle istemci etkinliği tamamlandıktan sonra veya istemci uygulaması commit() yöntemini çağırdığında çağrılır. Aşağıdaki kodda onSaveRequest() yönteminin bir örneği gösterilmektedir:
+
+Kotlin
+Java
+
+override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
+    // Get the structure from the request
+    val context: List<FillContext> = request.fillContexts
+    val structure: AssistStructure = context[context.size - 1].structure
+
+    // Traverse the structure looking for data to save
+    traverseStructure(structure)
+
+    // Persist the data - if there are no errors, call onSuccess()
+    callback.onSuccess()
+}
+Otomatik doldurma hizmetleri, hassas verileri kalıcı hale getirmeden önce şifrelemelidir. Ancak kullanıcı verileri, hassas olmayan etiketler veya veriler içerebilir. Örneğin, bir kullanıcı hesabı, verileri iş veya kişisel hesap olarak işaretleyen bir etiket içerebilir. Hizmetler etiketleri şifrelememelidir. Etiketler şifrelenmediğinde, kullanıcı kimlik doğrulaması yapmamışsa hizmetler etiketleri sunum görünümlerinde kullanabilir. Ardından, kullanıcı kimliğini doğruladıktan sonra hizmetler etiketleri gerçek verilerle değiştirebilir.
+
+Otomatik doldurma kaydetme kullanıcı arayüzünü erteleme
+Android 10'dan itibaren, otomatik doldurma iş akışını uygulamak için birden fazla ekran kullanıyorsanız (ör. kullanıcı adı alanı için bir ekran, şifre için başka bir ekran) SaveInfo.FLAG_DELAY_SAVE işaretini kullanarak otomatik doldurma kaydetme kullanıcı arayüzünü erteleyebilirsiniz.
+
+Bu işaret ayarlanırsa SaveInfo yanıtıyla ilişkili otomatik doldurma bağlamı kaydedildiğinde otomatik doldurma kaydetme kullanıcı arayüzü tetiklenmez. Bunun yerine, gelecekteki doldurma isteklerini sunmak için aynı görevde ayrı bir etkinlik kullanabilir ve ardından kullanıcı arayüzünü bir kaydetme isteği aracılığıyla gösterebilirsiniz. Daha fazla bilgi için SaveInfo.FLAG_DELAY_SAVE konusuna bakın.
+
+Kullanıcı kimlik doğrulamasını zorunlu kılma
+Otomatik doldurma hizmetleri, kullanıcıdan görünümleri doldurmadan önce kimliğini doğrulamasını isteyerek ek bir güvenlik düzeyi sağlayabilir. Aşağıdaki senaryolarda kullanıcı kimlik doğrulaması uygulanabilir:
+
+Uygulamadaki kullanıcı verilerinin birincil şifre veya parmak izi taraması kullanılarak kilidinin açılması gerekir.
+Kart doğrulama kodu (CVC) kullanılarak kredi kartı bilgileri gibi belirli bir veri kümesinin kilidinin açılması gerekir.
+Hizmetin, verilerin kilidini açmadan önce kullanıcı kimlik doğrulaması gerektirdiği senaryolarda hizmet, standart veriler veya bir etiket sunabilir ve kimlik doğrulama işlemini gerçekleştiren Intent'yi belirtebilir. Kimlik doğrulama akışı tamamlandıktan sonra isteği işlemek için ek veriye ihtiyacınız varsa bu verileri amaca ekleyebilirsiniz. Ardından kimlik doğrulama etkinliğiniz, verileri uygulamanızdaki AutofillService sınıfına döndürebilir.
+
+Aşağıdaki kod örneğinde, isteğin kimlik doğrulama gerektirdiğinin nasıl belirtileceği gösterilmektedir:
+
+Kotlin
+Java
+
+val authPresentation = RemoteViews(packageName, android.R.layout.simple_list_item_1).apply {
+    setTextViewText(android.R.id.text1, "requires authentication")
+}
+val authIntent = Intent(this, AuthActivity::class.java).apply {
+    // Send any additional data required to complete the request
+    putExtra(MY_EXTRA_DATASET_NAME, "my_dataset")
+}
+
+val intentSender: IntentSender = PendingIntent.getActivity(
+        this,
+        1001,
+        authIntent,
+        PendingIntent.FLAG_CANCEL_CURRENT
+).intentSender
+
+// Build a FillResponse object that requires authentication
+val fillResponse: FillResponse = FillResponse.Builder()
+        .setAuthentication(autofillIds, intentSender, authPresentation)
+        .build()
+Etkinlik, kimlik doğrulama akışını tamamladıktan sonra setResult() yöntemini çağırıp RESULT_OK değerini iletmeli ve EXTRA_AUTHENTICATION_RESULT ekstrasını, doldurulmuş veri kümesini içeren FillResponse nesnesine ayarlamalıdır. Aşağıdaki kodda, kimlik doğrulama akışları tamamlandıktan sonra sonucun nasıl döndürüleceğine dair bir örnek gösterilmektedir:
+
+Kotlin
+Java
+
+// The data sent by the service and the structure are included in the intent
+val datasetName: String? = intent.getStringExtra(MY_EXTRA_DATASET_NAME)
+val structure: AssistStructure = intent.getParcelableExtra(EXTRA_ASSIST_STRUCTURE)
+val parsedStructure: ParsedStructure = parseStructure(structure)
+val (username, password) = fetchUserData(parsedStructure)
+
+// Build the presentation of the datasets
+val usernamePresentation =
+        RemoteViews(packageName, android.R.layout.simple_list_item_1).apply {
+            setTextViewText(android.R.id.text1, "my_username")
+        }
+val passwordPresentation =
+        RemoteViews(packageName, android.R.layout.simple_list_item_1).apply {
+            setTextViewText(android.R.id.text1, "Password for my_username")
+        }
+
+// Add the dataset to the response
+val fillResponse: FillResponse = FillResponse.Builder()
+        .addDataset(Dataset.Builder()
+                .setValue(
+                        parsedStructure.usernameId,
+                        AutofillValue.forText(username),
+                        usernamePresentation
+                )
+                .setValue(
+                        parsedStructure.passwordId,
+                        AutofillValue.forText(password),
+                        passwordPresentation
+                )
+                .build()
+        ).build()
+
+val replyIntent = Intent().apply {
+    // Send the data back to the service
+    putExtra(MY_EXTRA_DATASET_NAME, datasetName)
+    putExtra(EXTRA_AUTHENTICATION_RESULT, fillResponse)
+}
+
+setResult(Activity.RESULT_OK, replyIntent)
+Bir kredi kartı veri kümesinin kilidinin açılması gerektiği senaryoda hizmet, CVC'yi isteyen bir kullanıcı arayüzü gösterebilir. Banka adı ve kredi kartı numarasının son dört hanesi gibi standart veriler sunarak veri kümesinin kilidi açılana kadar verileri gizleyebilirsiniz. Aşağıdaki örnekte, bir veri kümesi için kimlik doğrulamanın nasıl zorunlu kılınacağı ve kullanıcı CVC'yi sağlayana kadar verilerin nasıl gizleneceği gösterilmektedir:
+
+Kotlin
+Java
+
+// Parse the structure and fetch payment data
+val parsedStructure: ParsedStructure = parseStructure(structure)
+val paymentData: Payment = fetchPaymentData(parsedStructure)
+
+// Build the presentation that shows the bank and the last four digits of the
+// credit card number, such as 'Bank-1234'
+val maskedPresentation: String = "${paymentData.bank}-" +
+        paymentData.creditCardNumber.substring(paymentData.creditCardNumber.length - 4)
+val authPresentation = RemoteViews(packageName, android.R.layout.simple_list_item_1).apply {
+    setTextViewText(android.R.id.text1, maskedPresentation)
+}
+
+// Prepare an intent that displays the UI that asks for the CVC
+val cvcIntent = Intent(this, CvcActivity::class.java)
+val cvcIntentSender: IntentSender = PendingIntent.getActivity(
+        this,
+        1001,
+        cvcIntent,
+        PendingIntent.FLAG_CANCEL_CURRENT
+).intentSender
+
+// Build a FillResponse object that includes a Dataset that requires authentication
+val fillResponse: FillResponse = FillResponse.Builder()
+        .addDataset(
+                Dataset.Builder()
+                        // The values in the dataset are replaced by the actual
+                        // data once the user provides the CVC
+                        .setValue(parsedStructure.creditCardId, null, authPresentation)
+                        .setValue(parsedStructure.expDateId, null, authPresentation)
+                        .setAuthentication(cvcIntentSender)
+                        .build()
+        ).build()
+Etkinlik, CVC'yi doğruladıktan sonra setResult() yöntemini çağırıp RESULT_OK değerini iletmeli ve EXTRA_AUTHENTICATION_RESULT ekstrasını kredi kartı numarasını ve son kullanma tarihini içeren bir Dataset nesnesi olarak ayarlamalıdır. Yeni veri kümesi, kimlik doğrulama gerektiren veri kümesinin yerini alır ve görünümler hemen doldurulur. Aşağıdaki kodda, kullanıcı CVC'yi sağladıktan sonra veri kümesinin nasıl döndürüleceğine dair bir örnek gösterilmektedir:
+
+Kotlin
+Java
+
+// Parse the structure and fetch payment data.
+val parsedStructure: ParsedStructure = parseStructure(structure)
+val paymentData: Payment = fetchPaymentData(parsedStructure)
+
+// Build a non-null RemoteViews object to use as the presentation when
+// creating the Dataset object. This presentation isn't actually used, but the
+// Builder object requires a non-null presentation.
+val notUsed = RemoteViews(packageName, android.R.layout.simple_list_item_1)
+
+// Create a dataset with the credit card number and expiration date.
+val responseDataset: Dataset = Dataset.Builder()
+        .setValue(
+                parsedStructure.creditCardId,
+                AutofillValue.forText(paymentData.creditCardNumber),
+                notUsed
+        )
+        .setValue(
+                parsedStructure.expDateId,
+                AutofillValue.forText(paymentData.expirationDate),
+                notUsed
+        )
+        .build()
+
+val replyIntent = Intent().apply {
+    putExtra(EXTRA_AUTHENTICATION_RESULT, responseDataset)
+}
+Verileri mantıksal gruplar halinde düzenleme
+Otomatik doldurma hizmetleri, verileri farklı alanlardaki kavramları birbirinden ayıran mantıksal gruplar halinde düzenlemelidir. Bu sayfada, bu mantıksal gruplara bölümler adı verilir. Aşağıdaki listede, bölümler ve alanlarla ilgili tipik örnekler gösterilmektedir:
+
+Kullanıcı adı ve şifre alanlarını içeren kimlik bilgileri.
+Sokak, şehir, eyalet ve posta kodu alanlarını içeren adres.
+Kredi kartı numarası, son kullanma tarihi ve doğrulama kodu alanlarını içeren ödeme bilgileri.
+Verileri doğru şekilde bölümlendiren bir otomatik doldurma hizmeti, bir veri kümesinde birden fazla bölümden veri göstermeyerek kullanıcılarının verilerini daha iyi koruyabilir. Örneğin, kimlik bilgilerini içeren bir veri kümesinin ödeme bilgilerini içermesi gerekmez. Verileri bölümler halinde düzenlemek, hizmetinizin bir isteği karşılamak için gereken minimum miktarda alakalı bilgiyi kullanıma sunmasına olanak tanır.
+
+Verileri bölümlere ayırarak düzenlemek, hizmetlerin istemci uygulamasına minimum miktarda alakalı veri gönderirken birden fazla bölümden görüntülemeler içeren etkinlikleri doldurmasını sağlar. Örneğin, kullanıcı adı, şifre, sokak ve şehir için görüntülemeler içeren bir etkinliği ve aşağıdaki verilere sahip bir otomatik doldurma hizmetini ele alalım:
+
+Bölüm	Alan 1	Alan 2
+Kimlik Bilgisi	work_username	work_password
+personal_username	personal_password
+Adres	work_street	work_city
+personal_street	personal_city
+Hizmet, hem iş hem de kişisel hesaplar için kimlik bilgileri bölümünü içeren bir veri kümesi hazırlayabilir. Kullanıcı bir veri kümesi seçtiğinde, sonraki otomatik doldurma yanıtı, kullanıcının ilk seçimine bağlı olarak iş veya kişisel adresi sağlayabilir.
+
+Bir hizmet, AssistStructure nesnesinde gezinirken isFocused() yöntemini çağırarak isteği başlatan alanı tanımlayabilir. Bu sayede hizmet, uygun bölüm verileriyle bir FillResponse hazırlayabilir.
+
+SMS tek seferlik kodunu otomatik doldurma
+Otomatik doldurma hizmetiniz, SMS Retriever API'yi kullanarak kullanıcının SMS ile gönderilen tek seferlik kodları doldurmasına yardımcı olabilir.
+
+Bu özelliği kullanmak için aşağıdaki koşulların karşılanması gerekir:
+
+Otomatik doldurma hizmeti, Android 9 (API düzeyi 28) veya sonraki sürümlerde çalışıyor olmalıdır.
+Kullanıcı, otomatik doldurma hizmetinizin SMS'ten tek seferlik kodları okumasına izin verir.
+Otomatik doldurma sağladığınız uygulama, tek kullanımlık kodları okumak için SMS Retriever API'sini kullanmıyor.
+Otomatik doldurma hizmetiniz, Google Play Hizmetleri 19.0.56 veya sonraki sürümlerden SmsCodeRetriever.getAutofillClient() çağrılarak kullanılabilen SmsCodeAutofillClient'ı kullanabilir.
+
+Bu API'yi otomatik doldurma hizmetinde kullanmak için temel adımlar şunlardır:
+
+Otomatik doldurma hizmetinde, otomatik doldurma işlemini yaptığınız uygulamanın paket adı için etkin istek olup olmadığını belirlemek üzere hasOngoingSmsRequest SmsCodeAutofillClient kullanın. Otomatik doldurma hizmetiniz yalnızca bu işlev false değerini döndürürse öneri istemi göstermelidir.
+Otomatik doldurma hizmetinde, checkPermissionState SmsCodeAutofillClient seçeneğini kullanarak otomatik doldurma hizmetinin tek seferlik kodları otomatik doldurma izni olup olmadığını kontrol edin. Bu izin durumu NONE, GRANTED veya DENIED olabilir. Otomatik doldurma hizmeti, NONE ve GRANTED durumları için bir öneri istemi göstermelidir.
+Otomatik doldurma kimlik doğrulama etkinliğinde, BroadcastReceiver SmsRetriever.SEND_PERMISSION iznini kullanarak SmsCodeRetriever.SMS_CODE_RETRIEVED_ACTION dinleyen bir BroadcastReceiver kaydedin. Bu sayede, SMS kodu sonucu kullanılabilir olduğunda alınır.
+SMS ile gönderilen tek seferlik kodları dinlemeye başlamak için startSmsCodeRetriever numaralı telefonu SmsCodeAutofillClient arayın. Kullanıcı, otomatik doldurma hizmetinizin SMS'ten tek seferlik kodları almasına izin verirse bu hizmet, son bir ila beş dakika içinde alınan SMS mesajlarını arar.
+
+Otomatik doldurma hizmetinizin tek kullanımlık kodları okumak için kullanıcı izni istemesi gerekiyorsa Task, startSmsCodeRetriever tarafından ResolvableApiException döndürülerek başarısız olabilir. Bu durumda, izin isteği için bir izin iletişim kutusu göstermek üzere ResolvableApiException.startResolutionForResult() yöntemini çağırmanız gerekir.
+
+Amaçtan SMS kodu sonucunu alın ve SMS kodunu otomatik doldurma yanıtı olarak döndürün.
+
+Not: Alıcınıza com.google.android.gms.auth.api.phone.permission.SEND iznini ekleyerek yayın amacının SMS Retriever API'den geldiğini tespit edebilirsiniz. Bu izin ayarı, Google Play Hizmetleri'nin 19.8.31 veya sonraki sürümlerinde kullanılabilir.
+Chrome'da otomatik doldurmayı etkinleştirme
+Chrome, üçüncü taraf otomatik doldurma hizmetlerinin formları yerel olarak otomatik doldurmasına olanak tanır. Bu sayede kullanıcılara daha sorunsuz ve basit bir kullanıcı deneyimi sunulur. Şifreleri, geçiş anahtarlarını ve adresler ile ödeme verileri gibi diğer bilgileri otomatik doldurmak için üçüncü taraf otomatik doldurma hizmetlerini kullanmak isteyen kullanıcılar, Chrome ayarlarında Başka bir hizmet kullanarak otomatik doldur'u seçmelidir.
+
+Chrome&#39;da otomatik doldurmayı etkinleştirme
+
+Kullanıcıların hizmetiniz ve Android'de Chrome ile mümkün olan en iyi otomatik doldurma deneyimini yaşaması için otomatik doldurma hizmeti sağlayıcıları, kullanıcılarını Chrome ayarlarında tercih ettikleri hizmet sağlayıcıyı belirtmeye teşvik etmelidir.
+
+Geliştiriciler, kullanıcıların açma/kapatma düğmesini etkinleştirmesine yardımcı olmak için şunları yapabilir:
+
+Chrome ayarlarını sorgulayın ve kullanıcının üçüncü taraf otomatik doldurma hizmetini kullanmak isteyip istemediğini öğrenin.
+Kullanıcıların üçüncü taraf otomatik doldurma hizmetlerini etkinleştirebileceği Chrome ayarları sayfasına giden derin bağlantı.
+Uyumluluk modu için maksimum Chrome sürümlerini belirtin
+Chrome, Android otomatik doldurma özelliğini desteklemek için 137 sürümünden itibaren uyumluluk modunu desteklemeyi durdurdu. Uyumluluk modunu etkin tutmak kararlılık sorunlarına neden olabilir. Uyumluluk modunu destekleyen Chrome paketlerinin maksimum sürümünü kararlılık için aşağıdaki gibi belirtin.
+
+
+<autofill-service>
+  ...
+  <compatibility-package android:name="com.android.chrome" android:maxLongVersionCode="711900039" />
+  <compatibility-package android:name="com.chrome.beta" android:maxLongVersionCode="711900039" />
+  <compatibility-package android:name="com.chrome.dev" android:maxLongVersionCode="711900039" />
+  <compatibility-package android:name="com.chrome.canary" android:maxLongVersionCode="711900039" />
+  ...
+</autofill-service>
+Chrome ayarlarını okuma
+Herhangi bir uygulama, Chrome'un Android otomatik doldurma özelliğini kullanmasına olanak tanıyan 3. taraf otomatik doldurma modunu kullanıp kullanmadığını okuyabilir. Chrome, bu bilgileri iletmek için Android'in ContentProvider özelliğini kullanır. Android manifest dosyanızda hangi kanallardan ayarları okumak istediğinizi belirtin:
+
+
+<uses-permission android:name="android.permission.READ_USER_DICTIONARY"/>
+<queries>
+ <!-- To Query Chrome Beta: -->
+ <package android:name="com.chrome.beta" />
+
+ <!-- To Query Chrome Stable: -->
+ <package android:name="com.android.chrome" />
+</queries>
+Ardından, içerik URI'sini oluşturarak bu bilgileri istemek için Android'in ContentResolver özelliğini kullanın:
+
+Kotlin
+Java
+
+val CHROME_CHANNEL_PACKAGE = "com.android.chrome" // Chrome Stable.
+val CONTENT_PROVIDER_NAME = ".AutofillThirdPartyModeContentProvider"
+val THIRD_PARTY_MODE_COLUMN = "autofill_third_party_state"
+val THIRD_PARTY_MODE_ACTIONS_URI_PATH = "autofill_third_party_mode"
+
+val uri = Uri.Builder()
+    .scheme(ContentResolver.SCHEME_CONTENT)
+    .authority(CHROME_CHANNEL_PACKAGE + CONTENT_PROVIDER_NAME)
+    .path(THIRD_PARTY_MODE_ACTIONS_URI_PATH)
+    .build()
+
+val cursor = contentResolver.query(
+    uri,
+    arrayOf(THIRD_PARTY_MODE_COLUMN), // projection
+    null, // selection
+    null, // selectionArgs
+    null  // sortOrder
+)
+
+if (cursor == null) {
+  // Terminate now! Older versions of Chromium don't provide this information.
+}
+
+cursor?.use { // Use the safe call operator and the use function for auto-closing
+    if (it.moveToFirst()) { // Check if the cursor has any rows
+        val index = it.getColumnIndex(THIRD_PARTY_MODE_COLUMN)
+        if (index != -1) { // Check if the column exists
+          val value = it.getInt(index)
+          if (0 == value) {
+              // 0 means that the third party mode is turned off. Chrome uses its built-in
+              // password manager. This is the default for new users.
+          } else {
+              // 1 means that the third party mode is turned on. Chrome uses forwards all
+              // autofill requests to Android Autofill. Users have to opt-in for this.
+          }
+        } else {
+          // Handle the case where the column doesn't exist.  Log a warning, perhaps.
+          Log.w("Autofill", "Column $THIRD_PARTY_MODE_COLUMN not found in cursor")
+        }
+    }
+} // The cursor is automatically closed here
+Chrome ayarlarına derin bağlantı oluşturma
+Kullanıcıların üçüncü taraf otomatik doldurma hizmetlerini etkinleştirebileceği Chrome ayarları sayfasına derin bağlantı oluşturmak için Android Intent kullanın. İşlemi ve kategorileri bu örnekte gösterildiği gibi yapılandırdığınızdan emin olun:
+
+Kotlin
+Java
+
+val autofillSettingsIntent = Intent(Intent.ACTION_APPLICATION_PREFERENCES)
+autofillSettingsIntent.addCategory(Intent.CATEGORY_DEFAULT)
+autofillSettingsIntent.addCategory(Intent.CATEGORY_APP_BROWSER)
+autofillSettingsIntent.addCategory(Intent.CATEGORY_PREFERENCE)
+
+// Invoking the intent with a chooser allows users to select the channel they
+// want to configure. If only one browser reacts to the intent, the chooser is
+// skipped.
+val chooser = Intent.createChooser(autofillSettingsIntent, "Pick Chrome Channel")
+startActivity(chooser)
+
+// If the caller knows which Chrome channel they want to configure,
+// they can instead add a package hint to the intent, e.g.
+val specificChromeIntent = Intent(Intent.ACTION_APPLICATION_PREFERENCES) // Create a *new* intent
+specificChromeIntent.addCategory(Intent.CATEGORY_DEFAULT)
+specificChromeIntent.addCategory(Intent.CATEGORY_APP_BROWSER)
+specificChromeIntent.addCategory(Intent.CATEGORY_PREFERENCE)
+specificChromeIntent.setPackage("com.android.chrome") // Set the package on the *new* intent
+startActivity(specificChromeIntent) // Start the *new* intent
+Gelişmiş otomatik doldurma senaryoları
+Klavyeyle entegrasyon
+Android 11'den itibaren platform, klavyelerin ve diğer giriş yöntemi düzenleyicilerinin (IME'ler) açılır menü kullanmak yerine otomatik doldurma önerilerini satır içi olarak göstermesine olanak tanır. Otomatik doldurma hizmetinizin bu işlevi nasıl destekleyebileceği hakkında daha fazla bilgi için Otomatik doldurmayı klavyelerle entegre etme başlıklı makaleyi inceleyin.
+Veri kümelerini sayfalandırma
+Büyük bir otomatik doldurma yanıtı, isteği işlemek için gereken uzaktan erişilebilir nesneyi temsil eden Binder nesnesinin izin verilen işlem boyutunu aşabilir. Android sisteminin bu senaryolarda istisna oluşturmasını önlemek için FillResponse öğesini küçük tutabilir, yani tek seferde en fazla 20 Dataset nesnesi ekleyebilirsiniz. Yanıtınız için daha fazla veri kümesi gerekiyorsa kullanıcıların daha fazla bilgi olduğunu bilmesini sağlayan ve seçildiğinde sonraki veri kümesi grubunu alan bir veri kümesi ekleyebilirsiniz. Daha fazla bilgi için addDataset(Dataset) başlıklı makaleyi inceleyin.
+Birden fazla ekrana bölünmüş verileri kaydetme
+Uygulamalar genellikle kullanıcı verilerini aynı etkinlikteki birden fazla ekrana böler. Bu durum özellikle yeni kullanıcı hesabı oluşturmak için kullanılan etkinliklerde görülür. Örneğin, ilk ekranda kullanıcı adı istenir ve kullanıcı adı kullanılabilirse ikinci ekranda şifre istenir. Bu durumlarda, otomatik doldurma hizmeti, otomatik doldurma kaydetme kullanıcı arayüzünün gösterilebilmesi için kullanıcının her iki alanı da doldurmasını beklemelidir. Bu tür senaryoları ele almak için aşağıdaki adımları uygulayın:
+
+İlk doldurma isteğinde, ekranda bulunan kısmi alanların otomatik doldurma kimliklerini içeren yanıta bir istemci durumu paketi ekleyin.
+İkinci doldurma isteğinde, istemci durumu paketini alın, önceki istekte istemci durumunda ayarlanan otomatik doldurma kimliklerini alın ve bu kimlikleri ve FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE işaretini ikinci yanıtta kullanılan SaveInfo nesnesine ekleyin.
+Kaydetme isteğinde, her alanın değerini almak için uygun FillContext nesnelerini kullanın. Her doldurma isteği için bir doldurma bağlamı vardır.
+Daha fazla bilgi için Veriler birden fazla ekrana bölündüğünde kaydetme başlıklı makaleyi inceleyin.
+
+Her istek için başlatma ve kapatma mantığı sağlama
+Android sistemi, her otomatik doldurma isteğinde hizmete bağlanır ve hizmetin onConnected() yöntemini çağırır. Hizmet isteği işledikten sonra Android sistemi onDisconnected() yöntemini çağırır ve hizmetten bağlantıyı kaldırır. İsteği işlemeden önce çalışan kodu sağlamak için onConnected(), isteği işledikten sonra çalışan kodu sağlamak için onDisconnected() öğesini uygulayabilirsiniz.
+
+Otomatik doldurma kaydetme kullanıcı arayüzünü özelleştirme
+Otomatik doldurma hizmetleri, kullanıcıların hizmetin verilerini kaydetmesine izin verip vermeyeceklerine karar vermelerine yardımcı olmak için otomatik doldurma kaydetme kullanıcı arayüzünü özelleştirebilir. Hizmetler, kaydedilenler hakkında basit bir metin veya özelleştirilmiş bir görünüm aracılığıyla ek bilgiler sağlayabilir. Hizmetler, kaydetme isteğini iptal eden düğmenin görünümünü de değiştirebilir ve kullanıcı bu düğmeye dokunduğunda bildirim alabilir. Daha fazla bilgi için SaveInfo referans sayfasına bakın.
+
+Uyumluluk modu
+Uyumluluk modu, otomatik doldurma hizmetlerinin otomatik doldurma amacıyla erişilebilirlik sanal yapısını kullanmasına olanak tanır. Bu özellik, özellikle otomatik doldurma API'lerini açıkça uygulamayan tarayıcılarda otomatik doldurma işlevi sağlamak için yararlıdır.
+
+Otomatik doldurma hizmetinizi uyumluluk modunu kullanarak test etmek için uyumluluk modu gerektiren tarayıcıyı veya uygulamayı açıkça izin verilenler listesine ekleyin. Aşağıdaki komutu çalıştırarak hangi paketlerin izin verilenler listesine eklendiğini kontrol edebilirsiniz:
+
+
+$ adb shell settings get global autofill_compat_mode_allowed_packages
+Test ettiğiniz paket listelenmemişse aşağıdaki komutu çalıştırarak paketi ekleyin. Burada pkgX, uygulamanın paketidir:
+
+
+$ adb shell settings put global autofill_compat_mode_allowed_packages pkg1[resId1]:pkg2[resId1,resId2]
+Uygulama bir tarayıcıysa oluşturulan sayfanın URL'sini içeren giriş alanının kaynak kimliğini belirtmek için resIdx öğesini kullanın.
+
+Uyumluluk modunda aşağıdaki sınırlamalar vardır:
+
+Hizmet, FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE işaretini kullandığında veya setTrigger() yöntemi çağrıldığında kaydetme isteği tetiklenir. Uyumluluk modu kullanılırken FLAG_SAVE_ON_ALL_VIEWS_INVISIBLE varsayılan olarak ayarlanır.
+Düğümlerin metin değeri, onSaveRequest(SaveRequest, SaveCallback) yönteminde kullanılamayabilir.
+Uyumluluk modu ve bununla ilişkili sınırlamalar hakkında daha fazla bilgi için AutofillService sınıf referansına bakın.

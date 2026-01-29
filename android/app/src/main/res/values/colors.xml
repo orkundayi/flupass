@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="flupass_primary">#1C5CFF</color>
+    <color name="flupass_on_primary">#FFFFFFFF</color>
+    <color name="flupass_surface">#F4F6FB</color>
+    <color name="flupass_surface_variant">#E3E8F6</color>
+    <color name="flupass_card_background">#FFFFFFFF</color>
+    <color name="flupass_text_primary">#132047</color>
+    <color name="flupass_text_secondary">#5C6B8A</color>
+    <color name="flupass_avatar_background">#DDE6FF</color>
+    <color name="flupass_divider">#CCD4E6</color>
+</resources>

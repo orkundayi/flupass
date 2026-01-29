@@ -1,0 +1,53 @@
+Otomatik doldurmayı IME'ler ve otomatik doldurma hizmetleriyle entegre edin
+
+bookmark_border
+Android 11'den itibaren klavyeler ve diğer giriş yöntemi düzenleyicileri (IME'ler), sistemin önerileri bir menüde göstermesi yerine otomatik doldurma önerilerini satır içi, öneri şeridinde veya benzer bir şekilde gösterebilir. Bu otomatik doldurma önerileri, şifreler veya kredi kartı bilgileri gibi özel veriler içerebileceğinden, kullanıcı bir öneri seçene kadar IME'de gizlenir. Bu özellikten yararlanmak için IME'leri ve otomatik doldurma hizmetlerini (ör. şifre yöneticileri) güncelleyin. Bir IME veya otomatik doldurma hizmeti satır içi otomatik doldurmayı desteklemiyorsa öneriler, Android 11'den önceki sürümlerde olduğu gibi bir menüde gösterilir.
+
+İş akışı
+Bu akışta IME, mevcut klavye veya diğer giriş düzenleyicisi, öneri sağlayıcı ise otomatik doldurma önerisinin uygun sağlayıcısı anlamına gelir. Giriş alanına ve kullanıcının ayarlarına bağlı olarak öneri sağlayıcı, platform veya otomatik doldurma hizmeti olabilir.
+
+Kullanıcı, otomatik doldurmayı tetikleyen bir giriş alanına (ör. şifre veya kredi kartı giriş alanı) odaklanır.
+
+Platform, satır içi otomatik doldurmayı destekleyip desteklemediklerini görmek için mevcut IME'ye ve uygun öneri sağlayıcıya sorgu gönderir. IME veya öneri sağlayıcı satır içi otomatik doldurmayı desteklemiyorsa öneri, Android 10 ve önceki sürümlerde olduğu gibi bir menüde gösterilir.
+
+Platform, IME'den öneri isteği göndermesini ister. Bu öneri isteğinde, gösterilecek maksimum öneri sayısı belirtilir ve her öneri için sunum özellikleri sağlanır. Sunu özellikleri; maksimum boyut, metin boyutu, renkler ve yazı tipi verileri gibi unsurları belirterek öneri sağlayıcının IME'nin görünüm ve tarzına uygun olmasını sağlar.
+
+Platform, öneri sağlayıcıdan istenen sayıda öneri sağlamasını ister. Her öneri, önerinin kullanıcı arayüzünü içeren bir View öğesini genişletmek için geri çağırma içerir.
+
+Platform, IME'ye önerilerin hazır olduğunu bildirir. IME, her önerinin View öğesini genişletmek için geri çağırma yöntemini çağırarak önerileri görüntüler. IME, kullanıcının özel bilgilerini korumak için bu aşamada önerilerin ne olduğunu görmez.
+
+Kullanıcı önerilerden birini seçerse IME, kullanıcının sistem menüsünden bir öneri seçmesiyle aynı şekilde bilgilendirilir.
+
+Aşağıdaki bölümlerde, satır içi otomatik doldurmayı desteklemek için IME'nizi veya otomatik doldurma hizmetinizi nasıl yapılandıracağınız açıklanmaktadır.
+
+IME'leri satır içi otomatik doldurmayı destekleyecek şekilde yapılandırma
+Bu bölümde, satır içi otomatik doldurmayı desteklemek için IME'nizi nasıl yapılandıracağınız açıklanmaktadır. IME'niz satır içi otomatik doldurmayı desteklemiyorsa platform, otomatik doldurma önerilerini menüde göstermeyi varsayılan olarak kullanır.
+
+IME'niz supportsInlinedSuggestions özelliğini true olarak ayarlamalıdır:
+
+
+<input-method
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsInlineSuggestions="true"/>
+Platformun otomatik doldurma önerisine ihtiyacı olduğunda IME'nizin InputMethodService.onCreateInlineSuggestionsRequest() yöntemini çağırır. Bu yöntemi uygulamanız gerekir. Aşağıdakileri belirten bir InlineSuggestionsRequest döndürün:
+
+IME'nizin istediği öneri sayısı.
+Her öneri için, önerinin nasıl sunulması gerektiğini tanımlayan bir InlinePresentationSpec.
+
+Not: İstenen öneri sayısından daha az sunum spesifikasyonu sağlarsanız son spesifikasyon, tüm fazla öneriler için kullanılır. Örneğin, yalnızca tek bir sunum spesifikasyonu sağlarsanız öneri sağlayıcı, tüm öneriler için bu spesifikasyonu kullanır.
+Platformda öneriler olduğunda, önerileri içeren bir InlineSuggestionsResponse ileterek IME'nizin onInlineSuggestionsResponse() yöntemini çağırır. Bu yöntemi uygulamanız gerekir. Uygulamanızda, öneri listesini almak için InlineSuggestionsResponse.getInlineSuggestions() işlevini çağırın, ardından her önerinin InlineSuggestion.inflate() yöntemini çağırarak önerileri genişletin.
+
+Satır içi otomatik doldurmayı desteklemek için otomatik doldurma hizmetlerini yapılandırma
+Bu bölümde, otomatik doldurma hizmetinizi satır içi otomatik doldurmayı destekleyecek şekilde nasıl yapılandıracağınız açıklanmaktadır. Uygulamanız satır içi otomatik doldurmayı desteklemiyorsa platform, otomatik doldurma önerilerini varsayılan olarak bir menüde gösterir.
+
+Otomatik doldurma hizmetiniz supportsInlinedSuggestions özelliğini true olarak ayarlamalıdır:
+
+
+<autofill-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:supportsInlineSuggestions="true"/>
+IME'nin otomatik doldurma önerilerine ihtiyacı olduğunda platform, Android 11'den önceki sürümlerde olduğu gibi otomatik doldurma hizmetinizin onFillRequest() yöntemini çağırır. Ancak hizmetinizin, IME tarafından oluşturulan InlineSuggestionsRequest öğesini almak için iletilen FillRequest nesnesinin getInlineSuggestionsRequest() yöntemini çağırması gerekir. InlineSuggestionsRequest, kaç satır içi önerinin gerekli olduğunu ve her birinin nasıl sunulması gerektiğini belirtir. IME, satır içi önerileri desteklemiyorsa yöntem null değerini döndürür.
+
+Otomatik doldurma hizmetiniz, InlinePresentation nesneleri oluşturur. Bu nesnelerin sayısı, InlineSuggestionsRequest içinde istenen maksimum sayıya kadar çıkabilir. Sunularınız, InlineSuggestionsRequest tarafından belirtilen boyut kısıtlamalarına uymalıdır. Önerilerinizi IME'ye döndürmek için her öneri için bir kez Dataset.Builder.setValue() çağrısı yapın. Android 11, satır içi önerileri desteklemek için Dataset.Builder.setValue() sürümleri sunar.
+
+Not: IME'nin, hizmetinizin sağladığı önerileri kullanması gerekse de bu işlev garanti edilmez.

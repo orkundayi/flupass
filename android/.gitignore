@@ -1,0 +1,11 @@
+gradle-wrapper.jar
+/.gradle
+/captures/
+/gradlew
+/gradlew.bat
+/local.properties
+GeneratedPluginRegistrant.java
+.cxx/
+
+# Keystore dosyaları GitHub'a commit edilir - kaybetmemek için!
+# See https://flutter.dev/to/reference-keystore
