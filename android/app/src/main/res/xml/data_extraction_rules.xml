@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+   This file defines data extraction rules for Android 12+ (API 31+).
+   We disable all cloud and device-to-device backup to prevent a scenario where
+   the encrypted database is restored but the encryption key (stored in Android KeyStore)
+   is not, which would make the data unreadable.
+   
+   Users should use the in-app CSV export/import feature to transfer their data.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>
